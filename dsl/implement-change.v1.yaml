@@ -1,0 +1,61 @@
+apiVersion: alo/v0alpha1
+kind: AgenticLoop
+metadata:
+  id: implement-change
+  version: 1.0.0
+  title: Implement and review a product change
+spec:
+  inputs:
+    - id: request
+      schema: schemas/request.schema.json
+  nodes:
+    - id: plan
+      kind: agent
+      produces: [implementation_plan]
+      telemetry:
+        required: [duration, status, input_ref, output_ref]
+    - id: code
+      kind: agent
+      consumes: [implementation_plan]
+      produces: [working_tree]
+      telemetry:
+        required: [duration, status, output_ref]
+    - id: test
+      kind: tool
+      consumes: [working_tree]
+      produces: [test_evidence]
+      telemetry:
+        required: [duration, status, output_ref]
+    - id: review
+      kind: evaluator
+      consumes: [working_tree, test_evidence]
+      produces: [review_findings]
+      telemetry:
+        required: [duration, status, output_ref]
+    - id: output
+      kind: output
+      consumes: [working_tree, test_evidence, review_findings]
+      produces: [pull_request]
+      telemetry:
+        required: [duration, status, output_ref]
+  edges:
+    - from: plan
+      to: code
+      meaning: sequence
+    - from: code
+      to: test
+      meaning: dependency
+    - from: test
+      to: review
+      meaning: dependency
+    - from: review
+      to: output
+      meaning: gate
+  outcomes:
+    - id: reviewable_change
+      measure: output.review_completeness
+      target: 1
+  privacy:
+    defaultCapture: metadata_only
+    allow: [operation_name, duration, status, token_count]
+    deny: [credentials, secrets]

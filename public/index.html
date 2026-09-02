@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agentic Loop Observability Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Local-first review surface</p>
+          <h1>Agentic Loop Observability Dashboard</h1>
+        </div>
+        <div class="toolbar">
+          <button data-action="export" class="toolbar-button">Export state</button>
+          <label class="toolbar-button toolbar-button--file">
+            Restore state
+            <input id="restoreFile" type="file" accept="application/json" />
+          </label>
+        </div>
+      </header>
+
+      <div class="statusbar">
+        <span data-role="status">Loading local state...</span>
+      </div>
+
+      <main class="layout">
+        <aside class="sidebar">
+          <div class="sidebar__header">
+            <p class="eyebrow">Inbox</p>
+            <h2>Outputs awaiting accountability</h2>
+          </div>
+          <section class="sidebar__list" data-role="output-list" aria-live="polite"></section>
+        </aside>
+
+        <section class="content" data-role="detail" aria-live="polite"></section>
+      </main>
+    </div>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>

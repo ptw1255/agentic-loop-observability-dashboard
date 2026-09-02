@@ -1,0 +1,31 @@
+{
+  "name": "agentic-loop-observability-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first browser dashboard for reviewing agent outputs, decisions, and observability evidence.",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "esbuild src/client/main.ts --bundle --format=esm --target=es2022 --outfile=public/assets/app.js",
+    "build:server": "tsc -p tsconfig.server.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "node --test --import tsx",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "better-sqlite3": "^12.4.1",
+    "express": "^5.1.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.6.0",
+    "esbuild": "^0.25.9",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2"
+  }
+}

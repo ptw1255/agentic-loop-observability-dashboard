@@ -130,7 +130,37 @@ The first release intentionally excludes remote multi-user hosting, autonomous m
 - [`ptw1255/Kiro-Observability`](https://github.com/ptw1255/Kiro-Observability) is a candidate agent-loop adapter and already exposes local telemetry concepts that can be mapped into the contract.
 - [`ptw1255/Skill-Clean-Data-Presentation`](https://github.com/ptw1255/Skill-Clean-Data-Presentation) is the required evidence-presentation standard for every chart, graph, table, and JSON view.
 
-## Status
+## Run it locally
 
-Planning complete. No production dashboard code is included yet.
+```bash
+npm install
+npm run build
+npm run start
+```
 
+Open `http://localhost:4173`.
+
+The current MVP slice includes:
+
+- a local TypeScript service and semantic HTML/CSS/TypeScript browser UI;
+- SQLite-backed append-only events and deterministic current-state projections;
+- seeded demo data for one pilot loop and one output review flow;
+- append-only accept, decline, and needs-changes decisions;
+- export and restore of local state;
+- JSON evidence views with compact, table, tree, and raw modes.
+
+## Current execution status
+
+Implemented now:
+
+- `#4` Freeze v1 contracts
+- `#1` Append-only event store and projections
+- `#2` MVP browser UI vertical slice
+- `#3` Review policy, privacy defaults, and backup or restore path
+
+Still pending:
+
+- live GitHub PR sync and adapter hardening
+- Phoenix and OpenInference trace integration
+- declared-versus-observed DSL conformance and DAG rendering
+- pilot hardening and diagnostics bundle

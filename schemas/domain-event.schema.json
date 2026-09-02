@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ptw1255/agentic-loop-observability-dashboard/schemas/domain-event.schema.json",
+  "title": "Agentic Loop Observability Domain Event",
+  "type": "object",
+  "required": [
+    "event_id",
+    "entity_id",
+    "entity_type",
+    "event_type",
+    "occurred_at",
+    "recorded_at",
+    "actor",
+    "source",
+    "schema_version",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entity_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": [
+        "output",
+        "action_item",
+        "pull_request",
+        "run",
+        "decision",
+        "telemetry_coverage"
+      ]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "output.created",
+        "output.version_added",
+        "output.submitted_for_review",
+        "action.created",
+        "action.state_changed",
+        "pull_request.linked",
+        "pull_request.snapshot_recorded",
+        "run.linked",
+        "decision.recorded",
+        "output.superseded",
+        "telemetry.coverage_assessed"
+      ]
+    },
+    "idempotency_key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent",
+            "system"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "alo.events/v1"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

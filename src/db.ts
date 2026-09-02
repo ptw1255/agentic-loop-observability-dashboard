@@ -1,9 +1,17 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import type { MigrationRecord } from "./types.js";
 
-const MIGRATIONS = [
-  `
+interface MigrationStep {
+  id: string;
+  sql: string;
+}
+
+const MIGRATIONS: MigrationStep[] = [
+  {
+    id: "0001_events",
+    sql: `
     CREATE TABLE IF NOT EXISTS events (
       event_id TEXT PRIMARY KEY,
       entity_id TEXT NOT NULL,
@@ -19,8 +27,11 @@ const MIGRATIONS = [
       schema_version TEXT NOT NULL,
       payload_json TEXT NOT NULL
     );
-  `,
   `
+  },
+  {
+    id: "0002_projection_reset_v1",
+    sql: `
     DROP TABLE IF EXISTS output_projection;
     DROP TABLE IF EXISTS artifact_projection;
     DROP TABLE IF EXISTS action_projection;
@@ -29,9 +40,12 @@ const MIGRATIONS = [
     DROP TABLE IF EXISTS pull_request_projection;
     DROP TABLE IF EXISTS pull_request_sync_projection;
     DROP TABLE IF EXISTS run_projection;
-  `,
   `
-    CREATE TABLE output_projection (
+  },
+  {
+    id: "0003_output_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS output_projection (
       output_id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       output_type TEXT NOT NULL,
@@ -55,9 +69,12 @@ const MIGRATIONS = [
       pull_request_canonical_repo TEXT,
       pull_request_rate_limit_reset_at TEXT
     );
-  `,
   `
-    CREATE TABLE artifact_projection (
+  },
+  {
+    id: "0004_artifact_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS artifact_projection (
       output_id TEXT NOT NULL,
       artifact_id TEXT NOT NULL,
       label TEXT NOT NULL,
@@ -73,9 +90,12 @@ const MIGRATIONS = [
       output_version INTEGER NOT NULL,
       PRIMARY KEY (output_id, artifact_id)
     );
-  `,
   `
-    CREATE TABLE action_projection (
+  },
+  {
+    id: "0005_action_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS action_projection (
       action_id TEXT PRIMARY KEY,
       output_id TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -86,9 +106,12 @@ const MIGRATIONS = [
       provenance TEXT NOT NULL,
       completion_evidence TEXT
     );
-  `,
   `
-    CREATE TABLE decision_projection (
+  },
+  {
+    id: "0006_decision_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS decision_projection (
       event_id TEXT PRIMARY KEY,
       output_id TEXT NOT NULL,
       state TEXT NOT NULL,
@@ -98,9 +121,12 @@ const MIGRATIONS = [
       output_version INTEGER NOT NULL,
       supersedes_version INTEGER
     );
-  `,
   `
-    CREATE TABLE telemetry_projection (
+  },
+  {
+    id: "0007_telemetry_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS telemetry_projection (
       output_id TEXT NOT NULL,
       signal TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -108,9 +134,12 @@ const MIGRATIONS = [
       details TEXT NOT NULL,
       PRIMARY KEY (output_id, signal)
     );
-  `,
   `
-    CREATE TABLE run_projection (
+  },
+  {
+    id: "0008_run_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS run_projection (
       output_id TEXT PRIMARY KEY,
       run_id TEXT NOT NULL,
       loop_definition_id TEXT,
@@ -121,9 +150,12 @@ const MIGRATIONS = [
       session_id TEXT,
       last_updated_at TEXT NOT NULL
     );
-  `,
   `
-    CREATE TABLE pull_request_projection (
+  },
+  {
+    id: "0009_pull_request_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS pull_request_projection (
       snapshot_id TEXT PRIMARY KEY,
       output_id TEXT NOT NULL,
       repository TEXT NOT NULL,
@@ -135,9 +167,12 @@ const MIGRATIONS = [
       file_count INTEGER NOT NULL,
       captured_at TEXT NOT NULL
     );
-  `,
   `
-    CREATE TABLE pull_request_sync_projection (
+  },
+  {
+    id: "0010_pull_request_sync_projection",
+    sql: `
+    CREATE TABLE IF NOT EXISTS pull_request_sync_projection (
       output_id TEXT PRIMARY KEY,
       repository TEXT NOT NULL,
       pull_request_number INTEGER NOT NULL,
@@ -149,6 +184,7 @@ const MIGRATIONS = [
       rate_limit_reset_at TEXT
     );
   `
+  }
 ];
 
 export function ensureDataDirectory(rootDir: string): string {
@@ -158,13 +194,44 @@ export function ensureDataDirectory(rootDir: string): string {
 }
 
 export function openDatabase(filePath: string): Database.Database {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const db = new Database(filePath);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = OFF");
 
-  for (const statement of MIGRATIONS) {
-    db.exec(statement);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL
+    );
+  `);
+
+  const hasMigration = db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1");
+  const recordMigration = db.prepare("INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)");
+
+  for (const migration of MIGRATIONS) {
+    const applied = hasMigration.get(migration.id);
+    if (applied) {
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    const transaction = db.transaction(() => {
+      db.exec(migration.sql);
+      recordMigration.run(migration.id, now);
+    });
+    transaction();
   }
 
   return db;
+}
+
+export function listAppliedMigrations(db: Database.Database): MigrationRecord[] {
+  return db
+    .prepare(`
+      SELECT id, applied_at AS appliedAt
+      FROM schema_migrations
+      ORDER BY id ASC
+    `)
+    .all() as MigrationRecord[];
 }

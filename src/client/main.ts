@@ -218,6 +218,42 @@ interface DashboardData {
     version: string;
     title: string;
   };
+  pilotMetrics: {
+    totalOutputs: number;
+    reviewStateCounts: Record<DecisionState, number>;
+    operationalSlices: {
+      staleCount: number;
+      failedCount: number;
+      traceLinkedCount: number;
+      dslMappedCount: number;
+    };
+    reviewCompleteness: {
+      numerator: number;
+      denominator: number;
+      percentage: number;
+      asOf: string;
+    };
+    traceLinkage: {
+      numerator: number;
+      denominator: number;
+      percentage: number;
+      asOf: string;
+    };
+    dslMappingCoverage: {
+      numerator: number;
+      denominator: number;
+      percentage: number;
+      asOf: string;
+    };
+    reviewLeadTime: {
+      decidedCount: number;
+      submittedCount: number;
+      averageHours: number | null;
+      medianHours: number | null;
+      asOf: string;
+    };
+    generatedAt: string;
+  };
 }
 
 const state = {
@@ -241,8 +277,10 @@ const elements = {
   status: document.querySelector<HTMLElement>("[data-role=status]"),
   outputList: document.querySelector<HTMLElement>("[data-role=output-list]"),
   detail: document.querySelector<HTMLElement>("[data-role=detail]"),
+  pilotMetrics: document.querySelector<HTMLElement>("[data-role=pilot-metrics]"),
   actorInput: document.querySelector<HTMLInputElement>("#actorName"),
   rationaleInput: document.querySelector<HTMLTextAreaElement>("#rationale"),
+  diagnosticsButton: document.querySelector<HTMLButtonElement>("[data-action=diagnostics]"),
   exportButton: document.querySelector<HTMLButtonElement>("[data-action=export]"),
   restoreInput: document.querySelector<HTMLInputElement>("#restoreFile")
 };
@@ -388,8 +426,44 @@ function setStatus(message: string): void {
 }
 
 function render(): void {
+  renderPilotMetrics();
   renderList();
   renderDetail();
+}
+
+function renderPilotMetrics(): void {
+  if (!elements.pilotMetrics) {
+    return;
+  }
+
+  const metrics = state.data?.pilotMetrics;
+  if (!metrics) {
+    elements.pilotMetrics.innerHTML = "";
+    return;
+  }
+
+  elements.pilotMetrics.innerHTML = `
+    <article class="metric-chip">
+      <span>Total outputs</span>
+      <strong>${metrics.totalOutputs}</strong>
+    </article>
+    <article class="metric-chip">
+      <span>Reviewed</span>
+      <strong>${metrics.reviewCompleteness.numerator}/${metrics.reviewCompleteness.denominator}</strong>
+    </article>
+    <article class="metric-chip">
+      <span>Trace linked</span>
+      <strong>${metrics.traceLinkage.percentage}%</strong>
+    </article>
+    <article class="metric-chip">
+      <span>DSL mapped</span>
+      <strong>${metrics.dslMappingCoverage.percentage}%</strong>
+    </article>
+    <article class="metric-chip">
+      <span>Median lead time</span>
+      <strong>${metrics.reviewLeadTime.medianHours == null ? "n/a" : `${metrics.reviewLeadTime.medianHours}h`}</strong>
+    </article>
+  `;
 }
 
 function renderList(): void {
@@ -1312,6 +1386,18 @@ async function exportState(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+async function exportDiagnostics(): Promise<void> {
+  const response = await fetch("/api/diagnostics?download=1");
+  const data = await response.json();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "agentic-loop-observability-diagnostics.json";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 async function restoreState(file: File): Promise<void> {
   const text = await file.text();
   const payload = JSON.parse(text);
@@ -1338,6 +1424,10 @@ async function restoreState(file: File): Promise<void> {
 
 elements.exportButton?.addEventListener("click", () => {
   void exportState();
+});
+
+elements.diagnosticsButton?.addEventListener("click", () => {
+  void exportDiagnostics();
 });
 
 elements.restoreInput?.addEventListener("change", () => {

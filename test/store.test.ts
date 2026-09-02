@@ -28,9 +28,9 @@ test("seed data replays into a stable output projection", () => {
   try {
     seedDemoData(store);
     store.refreshProjection();
-    const dashboard = readDashboardData(store.database);
-    assert.equal(dashboard.outputs.length, 1);
-    assert.equal(dashboard.outputs[0]?.status, "awaiting_review");
+    const dashboard = readDashboardData(store.database, "output-demo-kiro-observability");
+    assert.equal(dashboard.outputs.length, 20);
+    assert.equal(dashboard.selectedOutput?.summary.status, "awaiting_review");
     assert.equal(dashboard.selectedOutput?.runLink?.runId, "run-2026-09-02-001");
     assert.equal(dashboard.selectedOutput?.runLink?.loopDefinitionId, "implement-change");
     assert.equal(dashboard.selectedOutput?.artifacts[0]?.validationStatus, "valid");

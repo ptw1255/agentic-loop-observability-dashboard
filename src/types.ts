@@ -183,6 +183,7 @@ export interface DashboardData {
     version: string;
     title: string;
   };
+  pilotMetrics: PilotMetrics;
 }
 
 export interface RunLinkRecord {
@@ -315,4 +316,79 @@ export interface DslConformanceSummary {
   dependencyRecords: DependencyRecord[];
   criticalPath: CriticalPathRecord | null;
   criticalPathReason: string | null;
+}
+
+export interface RatioMetric {
+  numerator: number;
+  denominator: number;
+  percentage: number;
+  asOf: string;
+}
+
+export interface ReviewLeadTimeMetric {
+  decidedCount: number;
+  submittedCount: number;
+  averageHours: number | null;
+  medianHours: number | null;
+  asOf: string;
+}
+
+export interface PilotMetrics {
+  totalOutputs: number;
+  reviewStateCounts: Record<DecisionState, number>;
+  operationalSlices: {
+    staleCount: number;
+    failedCount: number;
+    traceLinkedCount: number;
+    dslMappedCount: number;
+  };
+  reviewCompleteness: RatioMetric;
+  traceLinkage: RatioMetric;
+  dslMappingCoverage: RatioMetric;
+  reviewLeadTime: ReviewLeadTimeMetric;
+  generatedAt: string;
+}
+
+export interface MigrationRecord {
+  id: string;
+  appliedAt: string;
+}
+
+export interface DiagnosticsBundle {
+  generatedAt: string;
+  appVersion: string;
+  environment: {
+    nodeVersion: string;
+    platform: string;
+    phoenixReachable: boolean;
+    githubCliReachable: boolean;
+  };
+  migrationRecords: MigrationRecord[];
+  counts: {
+    events: number;
+    outputs: number;
+    actionItems: number;
+    decisions: number;
+  };
+  pilotMetrics: PilotMetrics;
+  backupRestoreDrill: {
+    passed: boolean;
+    eventCountBefore: number;
+    eventCountAfter: number;
+    details: string;
+  };
+  migrationVerification: {
+    passed: boolean;
+    appliedMigrationIds: string[];
+    details: string;
+  };
+  recentLogs: Array<Record<string, unknown>>;
+  threatModel: {
+    docPath: string;
+    coveredAreas: string[];
+  };
+  operationsRunbook: {
+    docPath: string;
+    lifecycleFlows: string[];
+  };
 }

@@ -10,6 +10,7 @@ import type {
   DomainEvent,
   OutputDetail,
   OutputListItem,
+  PilotMetrics,
   PullRequestSnapshot,
   PullRequestSyncStatus,
   RunLinkRecord,
@@ -436,7 +437,8 @@ export function readDashboardData(db: Database.Database, selectedOutputId?: stri
       id: "implement-change",
       version: "1.0.0",
       title: "Implement and review a product change"
-    }
+    },
+    pilotMetrics: readPilotMetrics(db, outputs)
   };
 }
 
@@ -646,4 +648,157 @@ export function readOutputDetail(db: Database.Database, outputId: string): Outpu
     pullRequestSnapshots: filteredPullRequestSnapshots,
     pullRequestSyncStatus: pullRequestSyncStatus ?? null
   };
+}
+
+export function readPilotMetrics(db: Database.Database, outputs?: OutputListItem[]): PilotMetrics {
+  const generatedAt = new Date().toISOString();
+  const outputRows = outputs ?? (
+    db
+      .prepare(`
+        SELECT
+          output_id AS outputId,
+          title,
+          output_type AS outputType,
+          summary,
+          status,
+          creator,
+          run_id AS runId,
+          created_at AS createdAt,
+          updated_at AS updatedAt,
+          current_version AS currentVersion,
+          artifact_count AS artifactCount,
+          open_action_count AS openActionCount,
+          last_decision_at AS lastDecisionAt,
+          last_decision_actor AS lastDecisionActor,
+          stale_reason AS staleReason,
+          pull_request_repo AS pullRequestRepo,
+          pull_request_number AS pullRequestNumber,
+          pull_request_sync_state AS pullRequestSyncState,
+          pull_request_sync_message AS pullRequestSyncMessage,
+          pull_request_last_synced_at AS pullRequestLastSyncedAt,
+          pull_request_canonical_repo AS pullRequestCanonicalRepo,
+          pull_request_rate_limit_reset_at AS pullRequestRateLimitResetAt
+        FROM output_projection
+      `)
+      .all() as OutputListItem[]
+  );
+
+  const reviewStateCounts: Record<DecisionState, number> = {
+    draft: 0,
+    awaiting_review: 0,
+    needs_changes: 0,
+    accepted: 0,
+    declined: 0,
+    superseded: 0
+  };
+
+  for (const output of outputRows) {
+    reviewStateCounts[output.status] += 1;
+  }
+
+  const totalOutputs = outputRows.length;
+  const staleCount = outputRows.filter((output) => output.staleReason !== null).length;
+  const failedCount = outputRows.filter((output) =>
+    output.pullRequestSyncState !== null &&
+    output.pullRequestSyncState !== "sync_ok" &&
+    output.pullRequestSyncState !== "repo_renamed" &&
+    output.pullRequestSyncState !== "not_linked"
+  ).length;
+  const traceLinkedCount = outputRows.filter((output) => output.runId !== null).length;
+
+  const dslMappedCount = (db
+    .prepare(`
+      SELECT COUNT(DISTINCT output_id) AS count
+      FROM telemetry_projection
+      WHERE signal = 'alo.dsl.node_id' AND status = 'observed'
+    `)
+    .get() as { count: number }).count;
+
+  const leadTimeStats = readReviewLeadTime(db);
+
+  return {
+    totalOutputs,
+    reviewStateCounts,
+    operationalSlices: {
+      staleCount,
+      failedCount,
+      traceLinkedCount,
+      dslMappedCount
+    },
+    reviewCompleteness: ratioMetric(
+      outputRows.filter((output) => output.lastDecisionAt !== null).length,
+      totalOutputs,
+      generatedAt
+    ),
+    traceLinkage: ratioMetric(traceLinkedCount, totalOutputs, generatedAt),
+    dslMappingCoverage: ratioMetric(dslMappedCount, totalOutputs, generatedAt),
+    reviewLeadTime: {
+      ...leadTimeStats,
+      asOf: generatedAt
+    },
+    generatedAt
+  };
+}
+
+function ratioMetric(numerator: number, denominator: number, asOf: string): PilotMetrics["reviewCompleteness"] {
+  const percentage = denominator === 0 ? 0 : Math.round((numerator / denominator) * 1000) / 10;
+  return { numerator, denominator, percentage, asOf };
+}
+
+function readReviewLeadTime(db: Database.Database): Omit<PilotMetrics["reviewLeadTime"], "asOf"> {
+  const rows = db
+    .prepare(`
+      SELECT
+        entity_id AS outputId,
+        event_type AS eventType,
+        occurred_at AS occurredAt,
+        actor_kind AS actorKind
+      FROM events
+      WHERE entity_type = 'output'
+        AND event_type IN ('output.submitted_for_review', 'decision.recorded')
+      ORDER BY occurred_at ASC, recorded_at ASC
+    `)
+    .all() as Array<{
+      outputId: string;
+      eventType: DomainEvent["event_type"];
+      occurredAt: string;
+      actorKind: string;
+    }>;
+
+  const submittedAt = new Map<string, string>();
+  const leadTimesHours: number[] = [];
+  const decidedOutputIds = new Set<string>();
+
+  for (const row of rows) {
+    if (row.eventType === "output.submitted_for_review" && !submittedAt.has(row.outputId)) {
+      submittedAt.set(row.outputId, row.occurredAt);
+      continue;
+    }
+
+    if (row.eventType === "decision.recorded" && row.actorKind === "human" && submittedAt.has(row.outputId) && !decidedOutputIds.has(row.outputId)) {
+      const startedAt = new Date(submittedAt.get(row.outputId) as string).getTime();
+      const decidedAt = new Date(row.occurredAt).getTime();
+      leadTimesHours.push(Math.max(0, decidedAt - startedAt) / 3_600_000);
+      decidedOutputIds.add(row.outputId);
+    }
+  }
+
+  const sorted = [...leadTimesHours].sort((left, right) => left - right);
+  const averageHours = sorted.length === 0 ? null : roundMetric(sorted.reduce((sum, value) => sum + value, 0) / sorted.length);
+  const medianHours = sorted.length === 0 ? null : (
+    sorted.length % 2 === 1
+      ? roundMetric(sorted[(sorted.length - 1) / 2] ?? 0)
+      : roundMetric(((sorted[(sorted.length / 2) - 1] ?? 0) + (sorted[sorted.length / 2] ?? 0)) / 2)
+  );
+
+  return {
+    decidedCount: sorted.length,
+    submittedCount: submittedAt.size,
+    averageHours,
+    medianHours
+  };
+}
+
+function roundMetric(value: number): number {
+  return Math.round(value * 100) / 100;
 }

@@ -115,6 +115,8 @@ stateDiagram-v2
 - [Dashboard and loop-detail wireframes](docs/WIREFRAMES.md)
 - [JSON visualization acceptance criteria](docs/VISUALIZATION-ACCEPTANCE-CRITERIA.md)
 - [Ordered MVP implementation plan](docs/MVP-IMPLEMENTATION-PLAN.md)
+- [Operations runbook](docs/OPERATIONS-RUNBOOK.md)
+- [Threat model](docs/THREAT-MODEL.md)
 - [Machine-readable schema](schemas/agentic-loop-observability.schema.json)
 - [Example stateful capture](examples/loop-run.example.json)
 
@@ -141,17 +143,25 @@ npm run start
 
 Open `http://localhost:4173`.
 
+To run a clean seeded pilot without touching an existing local database:
+
+```bash
+DASHBOARD_DB_PATH=/tmp/alo-dashboard.sqlite PORT=4174 npm run start
+```
+
 The current MVP slice includes:
 
 - a local TypeScript service and semantic HTML/CSS/TypeScript browser UI;
-- SQLite-backed append-only events and deterministic current-state projections;
-- seeded demo data for one pilot loop and one output review flow;
+- SQLite-backed append-only events, versioned migrations, and deterministic current-state projections;
+- seeded 20-output pilot data covering accepted, declined, needs-changes, stale, failed, and superseded slices;
+- denominator-based pilot metrics for review completeness, trace linkage, DSL mapping coverage, and review lead time;
 - append-only accept, decline, and needs-changes decisions;
 - local GitHub pull-request linking, sync, cached snapshots, and failure-state capture through the `gh` CLI;
 - pinned local Phoenix deployment config, OpenInference instrumentation hooks, and degraded observability fallback when Phoenix is unavailable;
 - Phoenix-backed execution outline, parent or child tree rendering, and deep-link generation for traces and spans;
 - declared-versus-observed DSL conformance with explicit divergence and critical-path withholding rules;
-- export and restore of local state;
+- export and restore of local state with a diagnostics-backed replay drill;
+- structured NDJSON request logs and downloadable diagnostics bundles;
 - JSON evidence views with compact, table, tree, and raw modes plus schema validation, provenance, and stable deep-link restoration.
 
 ## Current execution status
@@ -165,8 +175,8 @@ Implemented now:
 - `#8` Phoenix-backed execution outline, tree view, and trace deep-links
 - `#9` JSON evidence presentation: validated, inspectable, and deep-linkable views
 - `#10` Versioned DSL conformance and declared-versus-observed DAG analysis
+- `#11` Pilot hardening, diagnostics, migrations, and operational recovery
 
 Still pending:
 
-- pilot hardening and diagnostics bundle
 - live happy-path Phoenix startup verification on this machine still requires a working local Docker daemon or equivalent Phoenix runtime

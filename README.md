@@ -134,6 +134,7 @@ The first release intentionally excludes remote multi-user hosting, autonomous m
 
 ```bash
 npm install
+npm run phoenix:up
 npm run build
 npm run start
 ```
@@ -147,8 +148,11 @@ The current MVP slice includes:
 - seeded demo data for one pilot loop and one output review flow;
 - append-only accept, decline, and needs-changes decisions;
 - local GitHub pull-request linking, sync, cached snapshots, and failure-state capture through the `gh` CLI;
+- pinned local Phoenix deployment config, OpenInference instrumentation hooks, and degraded observability fallback when Phoenix is unavailable;
+- Phoenix-backed execution outline, parent or child tree rendering, and deep-link generation for traces and spans;
+- declared-versus-observed DSL conformance with explicit divergence and critical-path withholding rules;
 - export and restore of local state;
-- JSON evidence views with compact, table, tree, and raw modes.
+- JSON evidence views with compact, table, tree, and raw modes plus schema validation, provenance, and stable deep-link restoration.
 
 ## Current execution status
 
@@ -158,9 +162,11 @@ Implemented now:
 - `#1` Append-only event store and projections
 - `#2` MVP browser UI vertical slice
 - `#3` Review policy, privacy defaults, and backup or restore path
+- `#8` Phoenix-backed execution outline, tree view, and trace deep-links
+- `#9` JSON evidence presentation: validated, inspectable, and deep-linkable views
+- `#10` Versioned DSL conformance and declared-versus-observed DAG analysis
 
 Still pending:
 
-- Phoenix and OpenInference trace integration
-- declared-versus-observed DSL conformance and DAG rendering
 - pilot hardening and diagnostics bundle
+- live happy-path Phoenix startup verification on this machine still requires a working local Docker daemon or equivalent Phoenix runtime

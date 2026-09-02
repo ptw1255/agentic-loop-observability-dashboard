@@ -157,7 +157,9 @@ export class EventStore {
         DELETE FROM action_projection;
         DELETE FROM decision_projection;
         DELETE FROM telemetry_projection;
+        DELETE FROM run_projection;
         DELETE FROM pull_request_projection;
+        DELETE FROM pull_request_sync_projection;
       `);
 
       const insert = this.db.prepare(`

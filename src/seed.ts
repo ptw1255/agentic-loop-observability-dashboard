@@ -95,7 +95,9 @@ export function seedDemoData(store: EventStore): void {
       output_id: outputId,
       run_id: runId,
       alo_loop_definition_id: "implement-change",
-      alo_dsl_version: "1.0.0"
+      alo_dsl_version: "1.0.0",
+      phoenix_project: "agentic-loop-observability-dashboard",
+      session_id: runId
     }
   });
 

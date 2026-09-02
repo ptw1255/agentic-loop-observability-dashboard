@@ -1,0 +1,11 @@
+services:
+  phoenix:
+    image: arizephoenix/phoenix:20.5.0
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+      - "9090:9090"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - ../../data/phoenix:/mnt/data

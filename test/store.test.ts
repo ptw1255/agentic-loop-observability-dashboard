@@ -31,6 +31,10 @@ test("seed data replays into a stable output projection", () => {
     const dashboard = readDashboardData(store.database);
     assert.equal(dashboard.outputs.length, 1);
     assert.equal(dashboard.outputs[0]?.status, "awaiting_review");
+    assert.equal(dashboard.selectedOutput?.runLink?.runId, "run-2026-09-02-001");
+    assert.equal(dashboard.selectedOutput?.runLink?.loopDefinitionId, "implement-change");
+    assert.equal(dashboard.selectedOutput?.artifacts[0]?.validationStatus, "valid");
+    assert.equal(dashboard.selectedOutput?.artifacts[1]?.validationStatus, "valid");
     assert.equal(dashboard.selectedOutput?.artifacts.length, 2);
     assert.equal(dashboard.selectedOutput?.actions.length, 1);
   } finally {

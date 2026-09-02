@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ptw1255/agentic-loop-observability-dashboard/schemas/prd.summary.schema.json",
+  "title": "PRD Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["objective", "outcomes", "next_actions"],
+  "properties": {
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

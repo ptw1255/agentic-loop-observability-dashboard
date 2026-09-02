@@ -43,10 +43,23 @@ interface ArtifactRecord {
   transformationLabel: string | null;
   schemaId: string | null;
   missingness: string[];
+  validationStatus: "valid" | "invalid" | "unavailable";
+  validationDetails: string | null;
 }
 
 interface OutputDetail {
   summary: OutputListItem;
+  runLink: {
+    outputId: string;
+    runId: string;
+    loopDefinitionId: string | null;
+    dslVersion: string | null;
+    phoenixProject: string | null;
+    traceId: string | null;
+    rootSpanId: string | null;
+    sessionId: string | null;
+    lastUpdatedAt: string;
+  } | null;
   artifacts: ArtifactRecord[];
   actions: Array<{
     actionId: string;
@@ -96,6 +109,106 @@ interface OutputDetail {
   } | null;
 }
 
+interface ObservabilitySummary {
+  available: boolean;
+  message: string;
+  projectName: string;
+  traceId: string | null;
+  rootSpanId: string | null;
+  runId: string | null;
+  sessionId: string | null;
+  traceLink: string | null;
+  spanLink: string | null;
+  spans: Array<{
+    spanId: string;
+    traceId: string;
+    parentId: string | null;
+    name: string;
+    spanKind: string;
+    statusCode: string;
+    startTime: string | null;
+    endTime: string | null;
+    latencyMs: number | null;
+    attributes: Record<string, unknown>;
+  }>;
+  outline: string[];
+  tree: ObservabilityTreeNode[];
+  annotations: Array<{
+    spanId: string;
+    name: string;
+    annotatorKind: string | null;
+    label: string | null;
+    score: number | null;
+    explanation: string | null;
+  }>;
+}
+
+interface ObservabilityTreeNode {
+  spanId: string;
+  label: string;
+  spanKind: string;
+  statusCode: string;
+  latencyMs: number | null;
+  children: ObservabilityTreeNode[];
+}
+
+interface DslConformanceSummary {
+  available: boolean;
+  message: string;
+  loopId: string;
+  loopVersion: string;
+  loopTitle: string;
+  outcomes: Array<{
+    id: string;
+    measure: string;
+    target: number | string | boolean | null;
+  }>;
+  declaredNodes: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    requiredTelemetry: string[];
+  }>;
+  declaredEdges: Array<{
+    from: string;
+    to: string;
+    meaning: string;
+  }>;
+  observedEdges: Array<{
+    fromNodeId: string | null;
+    toNodeId: string | null;
+    fromSpanId: string;
+    toSpanId: string;
+    meaning: "observed_execution";
+  }>;
+  nodeStates: Array<{
+    nodeId: string;
+    title: string;
+    kind: string;
+    observed: boolean;
+    spanIds: string[];
+    attemptCount: number;
+    status: "ok" | "error" | "missing";
+    latencyMs: number | null;
+    missingTelemetry: string[];
+  }>;
+  declaredNotObserved: string[];
+  unmappedSpans: Array<{
+    spanId: string;
+    name: string;
+    reason: string;
+  }>;
+  dependencyRecords: Array<{
+    type: "fan_in" | "fan_out" | "cross_run_link";
+    description: string;
+  }>;
+  criticalPath: {
+    nodeIds: string[];
+    totalLatencyMs: number;
+  } | null;
+  criticalPathReason: string | null;
+}
+
 interface DashboardData {
   generatedAt: string;
   outputs: OutputListItem[];
@@ -113,6 +226,10 @@ const state = {
   selectedArtifactId: null as string | null,
   artifactView: "compact" as "compact" | "table" | "tree" | "raw",
   artifactPathFilter: "",
+  observability: null as ObservabilitySummary | null,
+  observabilityLoading: false,
+  conformance: null as DslConformanceSummary | null,
+  conformanceLoading: false,
   statusText: "Loading local state...",
   errorText: ""
 };
@@ -144,13 +261,122 @@ async function loadDashboard(outputId?: string): Promise<void> {
     state.data = (await response.json()) as DashboardData;
     state.selectedOutputId = state.data.selectedOutput?.summary.outputId ?? null;
     state.selectedArtifactId = state.data.selectedOutput?.artifacts[0]?.artifactId ?? null;
+    state.observability = null;
+    state.conformance = null;
     setStatus(`Local snapshot refreshed ${formatDateTime(state.data.generatedAt)}`);
     render();
     schedulePullRequestPolling();
+    if (state.selectedOutputId) {
+      void loadObservability(state.selectedOutputId, true);
+      void loadConformance(state.selectedOutputId, true);
+    }
   } catch (error) {
     state.errorText = error instanceof Error ? error.message : "Unknown load error";
     setStatus("Unable to load local dashboard state.");
     render();
+  }
+}
+
+async function loadConformance(outputId: string, background: boolean): Promise<void> {
+  const requestedOutputId = outputId;
+  state.conformanceLoading = true;
+
+  try {
+    const response = await fetch(`/api/conformance?outputId=${encodeURIComponent(requestedOutputId)}`);
+    const payload = (await response.json()) as DslConformanceSummary | { error: string };
+    if (!response.ok || "error" in payload) {
+      throw new Error("error" in payload ? payload.error : `Conformance request failed with ${response.status}`);
+    }
+
+    if (state.selectedOutputId !== requestedOutputId) {
+      return;
+    }
+
+    state.conformance = payload;
+    if (!background && state.observabilityLoading === false) {
+      setStatus(`DSL conformance refreshed ${formatDateTime(new Date().toISOString())}`);
+    }
+    render();
+  } catch (error) {
+    if (state.selectedOutputId !== requestedOutputId) {
+      return;
+    }
+
+    state.conformance = {
+      available: false,
+      message: error instanceof Error ? error.message : "Conformance request failed.",
+      loopId: "implement-change",
+      loopVersion: "1.0.0",
+      loopTitle: "Implement and review a product change",
+      outcomes: [],
+      declaredNodes: [],
+      declaredEdges: [],
+      observedEdges: [],
+      nodeStates: [],
+      declaredNotObserved: [],
+      unmappedSpans: [],
+      dependencyRecords: [],
+      criticalPath: null,
+      criticalPathReason: "Conformance could not be computed."
+    };
+    render();
+  } finally {
+    if (state.selectedOutputId === requestedOutputId) {
+      state.conformanceLoading = false;
+    }
+  }
+}
+
+async function loadObservability(outputId: string, background: boolean): Promise<void> {
+  const requestedOutputId = outputId;
+  state.observabilityLoading = true;
+
+  if (!background) {
+    setStatus("Loading observability from local Phoenix...");
+    render();
+  }
+
+  try {
+    const response = await fetch(`/api/observability?outputId=${encodeURIComponent(requestedOutputId)}`);
+    const payload = (await response.json()) as ObservabilitySummary | { error: string };
+    if (!response.ok || "error" in payload) {
+      throw new Error("error" in payload ? payload.error : `Observability request failed with ${response.status}`);
+    }
+
+    if (state.selectedOutputId !== requestedOutputId) {
+      return;
+    }
+
+    state.observability = payload;
+    if (!background) {
+      setStatus(`Observability refreshed ${formatDateTime(new Date().toISOString())}`);
+    }
+    render();
+  } catch (error) {
+    if (state.selectedOutputId !== requestedOutputId) {
+      return;
+    }
+
+    state.observability = {
+      available: false,
+      message: error instanceof Error ? error.message : "Observability request failed.",
+      projectName: "agentic-loop-observability-dashboard",
+      traceId: null,
+      rootSpanId: null,
+      runId: null,
+      sessionId: null,
+      traceLink: null,
+      spanLink: null,
+      spans: [],
+      outline: [],
+      tree: [],
+      annotations: []
+    };
+    render();
+  } finally {
+    if (state.selectedOutputId === requestedOutputId) {
+      state.observabilityLoading = false;
+    }
   }
 }
 
@@ -288,6 +514,7 @@ function renderDetail(): void {
         <h3>Implementation context</h3>
         <dl class="stacked-list">
           <div><dt>Run ID</dt><dd>${escapeHtml(detail.summary.runId ?? "Not linked yet")}</dd></div>
+          <div><dt>Trace project</dt><dd>${escapeHtml(detail.runLink?.phoenixProject ?? "No Phoenix project linked")}</dd></div>
           <div><dt>PR summary</dt><dd>${renderPrSummary(detail)}</dd></div>
           <div><dt>Sync state</dt><dd>${renderPullRequestSyncState(detail)}</dd></div>
           <div><dt>Staleness</dt><dd>${escapeHtml(detail.summary.staleReason ?? "Fresh local snapshot")}</dd></div>
@@ -323,14 +550,30 @@ function renderDetail(): void {
 
     <section class="panel-grid">
       <section class="panel">
-        <h3>Telemetry coverage</h3>
-        ${renderCoverage(detail)}
+        <h3>Execution observability</h3>
+        <p class="muted">Trace evidence is optional to local review. When Phoenix is reachable, the run stays deep-linkable to spans and evaluations.</p>
+        <div class="decision-actions">
+          <button data-action="demo-trace" class="action-button">Run traced demo</button>
+          <button data-action="refresh-observability" class="action-button">Refresh observability</button>
+        </div>
+        ${renderObservability(detail)}
       </section>
 
       <section class="panel">
-        <h3>Observed PR history</h3>
-        ${renderPrHistory(detail)}
+        <h3>Telemetry coverage</h3>
+        ${renderCoverage(detail)}
       </section>
+    </section>
+
+    <section class="panel">
+      <h3>Observed PR history</h3>
+      ${renderPrHistory(detail)}
+    </section>
+
+    <section class="panel">
+      <h3>DSL conformance</h3>
+      <p class="muted">Declared workflow edges stay separate from observed execution edges. Critical path is withheld whenever graph or timing completeness is insufficient.</p>
+      ${renderConformance()}
     </section>
 
     ${artifactPanel}
@@ -339,6 +582,7 @@ function renderDetail(): void {
   wireDecisionButtons(detail.summary.outputId);
   wireArtifactTabs(detail.artifacts);
   wirePullRequestControls(detail.summary.outputId);
+  wireObservabilityControls(detail.summary.outputId);
 }
 
 function renderPrSummary(detail: OutputDetail): string {
@@ -432,6 +676,68 @@ function renderCoverage(detail: OutputDetail): string {
   `;
 }
 
+function renderObservability(detail: OutputDetail): string {
+  if (state.observabilityLoading && !state.observability) {
+    return `<p class="muted">Loading trace state...</p>`;
+  }
+
+  const observability = state.observability;
+  const runLink = detail.runLink;
+
+  if (!observability) {
+    return `<p class="muted">${runLink?.runId ? "Observability is available to load for this run." : "No linked run found for this output yet."}</p>`;
+  }
+
+  const outlineMarkup = observability.outline.length === 0
+    ? `<p class="muted">No observed span outline yet.</p>`
+    : `<ol class="timeline">${observability.outline.map((item) => `<li><p>${escapeHtml(item)}</p></li>`).join("")}</ol>`;
+
+  const treeMarkup = observability.tree.length === 0
+    ? `<p class="muted">No parent-child span tree rendered yet.</p>`
+    : `<ul class="tree-list">${observability.tree.map(renderObservedTree).join("")}</ul>`;
+
+  const annotationsMarkup = observability.annotations.length === 0
+    ? `<p class="muted">No Phoenix annotations or evaluations were returned for this run.</p>`
+    : `
+      <ul class="simple-list">
+        ${observability.annotations.map((annotation) => `
+          <li>
+            <div class="timeline__row">
+              <strong>${escapeHtml(annotation.name)}</strong>
+              <span class="muted">${escapeHtml(annotation.label ?? "unlabeled")} · ${escapeHtml(annotation.annotatorKind ?? "unknown annotator")}</span>
+            </div>
+            <p>${escapeHtml(annotation.explanation ?? "No explanation attached.")}</p>
+          </li>
+        `).join("")}
+      </ul>
+    `;
+
+  return `
+    <dl class="stacked-list">
+      <div><dt>Status</dt><dd>${escapeHtml(observability.message)}</dd></div>
+      <div><dt>Project</dt><dd>${escapeHtml(observability.projectName)}</dd></div>
+      <div><dt>Run</dt><dd>${escapeHtml(observability.runId ?? runLink?.runId ?? "Not linked")}</dd></div>
+      <div><dt>Session</dt><dd>${escapeHtml(observability.sessionId ?? runLink?.sessionId ?? "Not recorded")}</dd></div>
+      <div><dt>Trace</dt><dd>${renderLink(observability.traceLink, observability.traceId ?? "Trace unavailable")}</dd></div>
+      <div><dt>Root span</dt><dd>${renderLink(observability.spanLink, observability.rootSpanId ?? "Root span unavailable")}</dd></div>
+    </dl>
+    <div class="panel-grid panel-grid--tight">
+      <section class="panel panel--nested">
+        <h4>Execution outline</h4>
+        ${outlineMarkup}
+      </section>
+      <section class="panel panel--nested">
+        <h4>Span tree</h4>
+        ${treeMarkup}
+      </section>
+    </div>
+    <section class="panel panel--nested">
+      <h4>Annotations and evaluations</h4>
+      ${annotationsMarkup}
+    </section>
+  `;
+}
+
 function renderPrHistory(detail: OutputDetail): string {
   if (detail.pullRequestSnapshots.length === 0) {
     return `<p class="muted">No pull request snapshot cached yet. The adapter issue can wire this later without changing the review model.</p>`;
@@ -454,6 +760,104 @@ function renderPrHistory(detail: OutputDetail): string {
         .join("")}
     </ol>
   `;
+}
+
+function renderConformance(): string {
+  if (state.conformanceLoading && !state.conformance) {
+    return `<p class="muted">Loading declared-versus-observed comparison...</p>`;
+  }
+
+  const conformance = state.conformance;
+  if (!conformance) {
+    return `<p class="muted">Conformance has not been loaded for this output yet.</p>`;
+  }
+
+  const nodeMarkup = conformance.nodeStates.length === 0
+    ? `<p class="muted">No declared node state is available yet.</p>`
+    : `
+      <ul class="simple-list">
+        ${conformance.nodeStates.map((node) => `
+          <li>
+            <div class="timeline__row">
+              <strong>${escapeHtml(node.nodeId)}</strong>
+              <span class="pill pill--signal pill--${escapeClass(node.status)}">${escapeHtml(node.status)}</span>
+            </div>
+            <p>${escapeHtml(node.kind)} · attempts ${node.attemptCount} · latency ${node.latencyMs == null ? "n/a" : `${node.latencyMs}ms`}</p>
+            <p class="muted">${escapeHtml(node.missingTelemetry.length ? `Missing telemetry: ${node.missingTelemetry.join(", ")}` : "Required telemetry present for current checks.")}</p>
+          </li>
+        `).join("")}
+      </ul>
+    `;
+
+  const declaredEdges = conformance.declaredEdges.length === 0
+    ? `<p class="muted">No declared edges loaded.</p>`
+    : `
+      <ul class="simple-list">
+        ${conformance.declaredEdges.map((edge) => `
+          <li><strong>${escapeHtml(edge.from)}</strong> → <strong>${escapeHtml(edge.to)}</strong> <span class="muted">(${escapeHtml(edge.meaning)})</span></li>
+        `).join("")}
+      </ul>
+    `;
+
+  const observedEdges = conformance.observedEdges.length === 0
+    ? `<p class="muted">No observed execution edges are available yet.</p>`
+    : `
+      <ul class="simple-list">
+        ${conformance.observedEdges.map((edge) => `
+          <li><strong>${escapeHtml(edge.fromNodeId ?? "unmapped")}</strong> → <strong>${escapeHtml(edge.toNodeId ?? "unmapped")}</strong> <span class="muted">(${escapeHtml(edge.fromSpanId)} → ${escapeHtml(edge.toSpanId)})</span></li>
+        `).join("")}
+      </ul>
+    `;
+
+  return `
+    <dl class="stacked-list">
+      <div><dt>Loop</dt><dd>${escapeHtml(`${conformance.loopTitle} · ${conformance.loopId} v${conformance.loopVersion}`)}</dd></div>
+      <div><dt>Status</dt><dd>${escapeHtml(conformance.message)}</dd></div>
+      <div><dt>Divergence</dt><dd>${escapeHtml(renderDivergenceSummary(conformance))}</dd></div>
+      <div><dt>Critical path</dt><dd>${escapeHtml(conformance.criticalPath ? `${conformance.criticalPath.nodeIds.join(" → ")} · ${conformance.criticalPath.totalLatencyMs}ms` : (conformance.criticalPathReason ?? "Not available"))}</dd></div>
+    </dl>
+    <div class="panel-grid panel-grid--tight">
+      <section class="panel panel--nested">
+        <h4>Declared workflow edges</h4>
+        ${declaredEdges}
+      </section>
+      <section class="panel panel--nested">
+        <h4>Observed execution edges</h4>
+        ${observedEdges}
+      </section>
+    </div>
+    <section class="panel panel--nested">
+      <h4>Node conformance</h4>
+      ${nodeMarkup}
+    </section>
+  `;
+}
+
+function renderObservedTree(node: ObservabilityTreeNode): string {
+  const latency = node.latencyMs == null ? "n/a" : `${node.latencyMs}ms`;
+  return `
+    <li>
+      <div class="timeline__row">
+        <strong>${escapeHtml(node.label)}</strong>
+        <span class="muted">${escapeHtml(node.spanKind)} · ${escapeHtml(node.statusCode)} · ${escapeHtml(latency)}</span>
+      </div>
+      ${node.children.length ? `<ul class="tree-list">${node.children.map(renderObservedTree).join("")}</ul>` : ""}
+    </li>
+  `;
+}
+
+function renderDivergenceSummary(conformance: DslConformanceSummary): string {
+  const parts: string[] = [];
+  if (conformance.declaredNotObserved.length > 0) {
+    parts.push(`declared not observed: ${conformance.declaredNotObserved.join(", ")}`);
+  }
+  if (conformance.unmappedSpans.length > 0) {
+    parts.push(`unmapped spans: ${conformance.unmappedSpans.map((span) => span.name).join(", ")}`);
+  }
+  if (conformance.dependencyRecords.length > 0) {
+    parts.push(`dependencies: ${conformance.dependencyRecords.map((record) => record.description).join(" | ")}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "No declared-versus-observed divergence detected in the current view.";
 }
 
 function renderArtifactPanel(artifact: ArtifactRecord): string {
@@ -490,9 +894,11 @@ function renderArtifactPanel(artifact: ArtifactRecord): string {
       </div>
       <dl class="stacked-list">
         <div><dt>Schema</dt><dd>${escapeHtml(artifact.schemaId ?? "No schema attached")}</dd></div>
+        <div><dt>Validation</dt><dd>${escapeHtml(formatLabel(artifact.validationStatus))} · ${escapeHtml(artifact.validationDetails ?? "No validation details available")}</dd></div>
+        <div><dt>Provenance</dt><dd>${escapeHtml(`${artifact.sourceKind} · ${artifact.sourceLabel}`)}</dd></div>
         <div><dt>Transform</dt><dd>${escapeHtml(artifact.transformationLabel ?? "Raw evidence")}</dd></div>
         <div><dt>Missingness</dt><dd>${artifact.missingness.length ? artifact.missingness.map(escapeHtml).join(", ") : "None"}</dd></div>
-        <div><dt>Deep link</dt><dd>#output=${escapeHtml(state.selectedOutputId ?? "")}&artifact=${escapeHtml(artifact.artifactId)}&view=${state.artifactView}</dd></div>
+        <div><dt>Deep link</dt><dd>${escapeHtml(`#${buildArtifactHash(artifact.artifactId)}`)}</dd></div>
       </dl>
       <div class="tab-row">
         ${["compact", "table", "tree", "raw"]
@@ -682,6 +1088,57 @@ function wirePullRequestControls(outputId: string): void {
   });
 }
 
+function wireObservabilityControls(outputId: string): void {
+  const refreshButton = document.querySelector<HTMLButtonElement>("[data-action=refresh-observability]");
+  refreshButton?.addEventListener("click", () => {
+    void loadObservability(outputId, false);
+    void loadConformance(outputId, false);
+  });
+
+  const demoButton = document.querySelector<HTMLButtonElement>("[data-action=demo-trace]");
+  demoButton?.addEventListener("click", async () => {
+    setStatus("Running traced demo loop...");
+
+    const response = await fetch("/api/observability/demo-run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outputId })
+    });
+    const payload = (await response.json()) as
+      | { dashboard: DashboardData; observability: ObservabilitySummary }
+      | { error: string };
+
+    if (!response.ok || "error" in payload) {
+      state.observability = {
+        available: false,
+        message: "error" in payload ? payload.error : "Demo trace request failed.",
+        projectName: "agentic-loop-observability-dashboard",
+        traceId: null,
+        rootSpanId: null,
+        runId: null,
+        sessionId: null,
+        traceLink: null,
+        spanLink: null,
+        spans: [],
+        outline: [],
+        tree: [],
+        annotations: []
+      };
+      render();
+      return;
+    }
+
+    state.data = payload.dashboard;
+    state.selectedOutputId = payload.dashboard.selectedOutput?.summary.outputId ?? null;
+    state.selectedArtifactId = payload.dashboard.selectedOutput?.artifacts[0]?.artifactId ?? null;
+    state.observability = payload.observability;
+    state.errorText = "";
+    setStatus(`Demo trace recorded ${formatDateTime(payload.dashboard.generatedAt)}`);
+    render();
+    void loadConformance(outputId, true);
+  });
+}
+
 function wireArtifactTabs(artifacts: ArtifactRecord[]): void {
   document.querySelectorAll<HTMLButtonElement>("[data-artifact-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -711,18 +1168,22 @@ function wireArtifactTabs(artifacts: ArtifactRecord[]): void {
 }
 
 function updateHash(): void {
+  window.location.hash = buildArtifactHash(state.selectedArtifactId);
+}
+
+function buildArtifactHash(selectedArtifactId: string | null): string {
   const params = new URLSearchParams();
   if (state.selectedOutputId) {
     params.set("output", state.selectedOutputId);
   }
-  if (state.selectedArtifactId) {
-    params.set("artifact", state.selectedArtifactId);
+  if (selectedArtifactId) {
+    params.set("artifact", selectedArtifactId);
   }
   params.set("view", state.artifactView);
   if (state.artifactPathFilter) {
     params.set("path", state.artifactPathFilter);
   }
-  window.location.hash = params.toString();
+  return params.toString();
 }
 
 function loadHashState(): void {
@@ -829,6 +1290,14 @@ function formatValue(value: unknown): string {
     return JSON.stringify(value);
   }
   return String(value);
+}
+
+function renderLink(href: string | null, label: string): string {
+  if (!href) {
+    return escapeHtml(label);
+  }
+
+  return `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`;
 }
 
 async function exportState(): Promise<void> {

@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureDataDirectory, openDatabase } from "./db.js";
+import { buildDslConformance, parseLoopDefinition } from "./dsl.js";
 import { GithubPullRequestAdapter } from "./github.js";
+import { getObservabilityForOutput, isPhoenixAvailable, runAndLinkDemoTrace } from "./phoenix.js";
 import { readDashboardData } from "./projections.js";
 import { seedDemoData } from "./seed.js";
 import { EventStore } from "./store.js";
@@ -29,6 +31,51 @@ app.use(express.static(path.join(rootDir, "public")));
 app.get("/api/dashboard", (request, response) => {
   const selectedOutputId = typeof request.query.outputId === "string" ? request.query.outputId : null;
   response.json(readDashboardData(db, selectedOutputId));
+});
+
+app.get("/api/observability", async (request, response) => {
+  const outputId = typeof request.query.outputId === "string" ? request.query.outputId : null;
+  if (!outputId) {
+    response.status(400).json({ error: "outputId is required." });
+    return;
+  }
+
+  response.json(await getObservabilityForOutput(db, outputId));
+});
+
+app.get("/api/conformance", async (request, response) => {
+  const outputId = typeof request.query.outputId === "string" ? request.query.outputId : null;
+  if (!outputId) {
+    response.status(400).json({ error: "outputId is required." });
+    return;
+  }
+
+  const definition = parseLoopDefinition(rootDir);
+  const observability = await getObservabilityForOutput(db, outputId);
+  response.json(buildDslConformance(definition, observability));
+});
+
+app.post("/api/observability/demo-run", async (request, response) => {
+  const { outputId } = request.body as { outputId?: string };
+  if (!outputId) {
+    response.status(400).json({ error: "outputId is required." });
+    return;
+  }
+
+  if (!(await isPhoenixAvailable())) {
+    response.status(503).json({ error: "Phoenix is not reachable at http://localhost:6006. Start it with npm run phoenix:up." });
+    return;
+  }
+
+  try {
+    await runAndLinkDemoTrace(db, store, outputId);
+    response.status(201).json({
+      dashboard: readDashboardData(db, outputId),
+      observability: await getObservabilityForOutput(db, outputId)
+    });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : "Demo trace emission failed." });
+  }
 });
 
 app.post("/api/pull-requests/link", async (request, response) => {

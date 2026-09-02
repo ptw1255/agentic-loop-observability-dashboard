@@ -28,6 +28,7 @@ const MIGRATIONS = [
     DROP TABLE IF EXISTS telemetry_projection;
     DROP TABLE IF EXISTS pull_request_projection;
     DROP TABLE IF EXISTS pull_request_sync_projection;
+    DROP TABLE IF EXISTS run_projection;
   `,
   `
     CREATE TABLE output_projection (
@@ -106,6 +107,19 @@ const MIGRATIONS = [
       source TEXT NOT NULL,
       details TEXT NOT NULL,
       PRIMARY KEY (output_id, signal)
+    );
+  `,
+  `
+    CREATE TABLE run_projection (
+      output_id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      loop_definition_id TEXT,
+      dsl_version TEXT,
+      phoenix_project TEXT,
+      trace_id TEXT,
+      root_span_id TEXT,
+      session_id TEXT,
+      last_updated_at TEXT NOT NULL
     );
   `,
   `

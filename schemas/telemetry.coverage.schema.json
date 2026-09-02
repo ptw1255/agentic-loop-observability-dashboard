@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ptw1255/agentic-loop-observability-dashboard/schemas/telemetry.coverage.schema.json",
+  "title": "Telemetry Coverage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mappedSignals"],
+  "properties": {
+    "mappedSignals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal", "status"],
+        "properties": {
+          "signal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["observed", "missing", "derived", "declared", "redacted", "unavailable", "not_instrumented"]
+          }
+        }
+      }
+    }
+  }
+}

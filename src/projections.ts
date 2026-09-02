@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
+import { getArtifactValidation } from "./schema.js";
 import type {
   ActionItemRecord,
+  ArtifactDetailRecord,
   ArtifactRecord,
   DashboardData,
   DecisionRecord,
@@ -10,11 +12,13 @@ import type {
   OutputListItem,
   PullRequestSnapshot,
   PullRequestSyncStatus,
+  RunLinkRecord,
   TelemetryCoverageRecord
 } from "./types.js";
 
 interface OutputState {
   summary: OutputListItem;
+  runLink: RunLinkRecord | null;
   artifacts: ArtifactRecord[];
   actions: ActionItemRecord[];
   decisions: DecisionRecord[];
@@ -76,6 +80,7 @@ export function buildProjection(events: DomainEvent[]): Map<string, OutputState>
           pullRequestCanonicalRepo: null,
           pullRequestRateLimitResetAt: null
         },
+        runLink: null,
         artifacts: [],
         actions: [],
         decisions: [],
@@ -114,8 +119,27 @@ export function buildProjection(events: DomainEvent[]): Map<string, OutputState>
         break;
       }
       case "run.linked": {
-        const payload = event.payload as { run_id: string };
+        const payload = event.payload as {
+          run_id: string;
+          alo_loop_definition_id?: string | null;
+          alo_dsl_version?: string | null;
+          phoenix_project?: string | null;
+          trace_id?: string | null;
+          root_span_id?: string | null;
+          session_id?: string | null;
+        };
         output.summary.runId = payload.run_id;
+        output.runLink = {
+          outputId,
+          runId: payload.run_id,
+          loopDefinitionId: payload.alo_loop_definition_id ?? null,
+          dslVersion: payload.alo_dsl_version ?? null,
+          phoenixProject: payload.phoenix_project ?? null,
+          traceId: payload.trace_id ?? null,
+          rootSpanId: payload.root_span_id ?? null,
+          sessionId: payload.session_id ?? null,
+          lastUpdatedAt: event.occurred_at
+        };
         break;
       }
       case "action.created": {
@@ -246,6 +270,7 @@ export function writeProjection(db: Database.Database, projection: Map<string, O
     DELETE FROM action_projection;
     DELETE FROM decision_projection;
     DELETE FROM telemetry_projection;
+    DELETE FROM run_projection;
     DELETE FROM pull_request_projection;
     DELETE FROM pull_request_sync_projection;
   `);
@@ -291,6 +316,13 @@ export function writeProjection(db: Database.Database, projection: Map<string, O
   const insertTelemetry = db.prepare(`
     INSERT INTO telemetry_projection (output_id, signal, status, source, details)
     VALUES (@outputId, @signal, @status, @source, @details);
+  `);
+  const insertRun = db.prepare(`
+    INSERT INTO run_projection (
+      output_id, run_id, loop_definition_id, dsl_version, phoenix_project, trace_id, root_span_id, session_id, last_updated_at
+    ) VALUES (
+      @outputId, @runId, @loopDefinitionId, @dslVersion, @phoenixProject, @traceId, @rootSpanId, @sessionId, @lastUpdatedAt
+    );
   `);
   const insertPr = db.prepare(`
     INSERT INTO pull_request_projection (
@@ -343,6 +375,10 @@ export function writeProjection(db: Database.Database, projection: Map<string, O
 
       for (const coverage of state.telemetryCoverage) {
         insertTelemetry.run({ outputId, ...coverage });
+      }
+
+      if (state.runLink) {
+        insertRun.run(state.runLink);
       }
 
       for (const snapshot of state.pullRequestSnapshots) {
@@ -470,19 +506,26 @@ export function readOutputDetail(db: Database.Database, outputId: string): Outpu
       schemaId: string | null;
       missingnessJson: string;
     }>;
-  const parsedArtifacts = artifacts.map((record) => ({
-      artifactId: record.artifactId,
-      label: record.label,
-      mimeType: record.mimeType,
-      contentHash: record.contentHash,
-      jsonContent: record.jsonContent ? JSON.parse(record.jsonContent) : null,
-      sourceKind: record.sourceKind,
-      sourceLabel: record.sourceLabel,
-      capturedAt: record.capturedAt,
-      transformationLabel: record.transformationLabel,
-      schemaId: record.schemaId,
-      missingness: JSON.parse(record.missingnessJson)
-    })) as ArtifactRecord[];
+  const parsedArtifacts = artifacts.map((record) => {
+      const artifact = {
+        artifactId: record.artifactId,
+        label: record.label,
+        mimeType: record.mimeType,
+        contentHash: record.contentHash,
+        jsonContent: record.jsonContent ? JSON.parse(record.jsonContent) : null,
+        sourceKind: record.sourceKind,
+        sourceLabel: record.sourceLabel,
+        capturedAt: record.capturedAt,
+        transformationLabel: record.transformationLabel,
+        schemaId: record.schemaId,
+        missingness: JSON.parse(record.missingnessJson)
+      } satisfies ArtifactRecord;
+
+      return {
+        ...artifact,
+        ...getArtifactValidation(artifact.schemaId, artifact.jsonContent)
+      };
+    }) as ArtifactDetailRecord[];
 
   const actions = db
     .prepare(`
@@ -560,6 +603,23 @@ export function readOutputDetail(db: Database.Database, outputId: string): Outpu
       snapshot.pullRequestNumber === summary.pullRequestNumber
     );
 
+  const runLink = db
+    .prepare(`
+      SELECT
+        output_id AS outputId,
+        run_id AS runId,
+        loop_definition_id AS loopDefinitionId,
+        dsl_version AS dslVersion,
+        phoenix_project AS phoenixProject,
+        trace_id AS traceId,
+        root_span_id AS rootSpanId,
+        session_id AS sessionId,
+        last_updated_at AS lastUpdatedAt
+      FROM run_projection
+      WHERE output_id = ?
+    `)
+    .get(outputId) as RunLinkRecord | undefined;
+
   const pullRequestSyncStatus = db
     .prepare(`
       SELECT
@@ -578,6 +638,7 @@ export function readOutputDetail(db: Database.Database, outputId: string): Outpu
 
   return {
     summary,
+    runLink: runLink ?? null,
     artifacts: parsedArtifacts,
     actions,
     decisions: parsedDecisions,

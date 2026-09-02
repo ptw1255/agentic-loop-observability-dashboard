@@ -92,6 +92,11 @@ export interface ArtifactRecord {
   missingness: string[];
 }
 
+export interface ArtifactDetailRecord extends ArtifactRecord {
+  validationStatus: "valid" | "invalid" | "unavailable";
+  validationDetails: string | null;
+}
+
 export interface ActionItemRecord {
   actionId: string;
   title: string;
@@ -122,7 +127,8 @@ export interface TelemetryCoverageRecord {
 
 export interface OutputDetail {
   summary: OutputListItem;
-  artifacts: ArtifactRecord[];
+  runLink: RunLinkRecord | null;
+  artifacts: ArtifactDetailRecord[];
   actions: ActionItemRecord[];
   decisions: DecisionRecord[];
   telemetryCoverage: TelemetryCoverageRecord[];
@@ -177,4 +183,136 @@ export interface DashboardData {
     version: string;
     title: string;
   };
+}
+
+export interface RunLinkRecord {
+  outputId: string;
+  runId: string;
+  loopDefinitionId: string | null;
+  dslVersion: string | null;
+  phoenixProject: string | null;
+  traceId: string | null;
+  rootSpanId: string | null;
+  sessionId: string | null;
+  lastUpdatedAt: string;
+}
+
+export interface ObservabilitySummary {
+  available: boolean;
+  message: string;
+  projectName: string;
+  traceId: string | null;
+  rootSpanId: string | null;
+  runId: string | null;
+  sessionId: string | null;
+  traceLink: string | null;
+  spanLink: string | null;
+  spans: ObservedSpan[];
+  outline: string[];
+  tree: ObservedSpanTreeNode[];
+  annotations: ObservedAnnotation[];
+}
+
+export interface ObservedSpan {
+  spanId: string;
+  traceId: string;
+  parentId: string | null;
+  name: string;
+  spanKind: string;
+  statusCode: string;
+  startTime: string | null;
+  endTime: string | null;
+  latencyMs: number | null;
+  attributes: Record<string, unknown>;
+}
+
+export interface ObservedSpanTreeNode {
+  spanId: string;
+  label: string;
+  spanKind: string;
+  statusCode: string;
+  latencyMs: number | null;
+  children: ObservedSpanTreeNode[];
+}
+
+export interface ObservedAnnotation {
+  spanId: string;
+  name: string;
+  annotatorKind: string | null;
+  label: string | null;
+  score: number | null;
+  explanation: string | null;
+}
+
+export interface LoopDefinitionNode {
+  id: string;
+  kind: string;
+  title: string;
+  requiredTelemetry: string[];
+}
+
+export interface LoopDefinitionEdge {
+  from: string;
+  to: string;
+  meaning: string;
+}
+
+export interface LoopDefinitionOutcome {
+  id: string;
+  measure: string;
+  target: number | string | boolean | null;
+}
+
+export interface ObservedExecutionEdge {
+  fromNodeId: string | null;
+  toNodeId: string | null;
+  fromSpanId: string;
+  toSpanId: string;
+  meaning: "observed_execution";
+}
+
+export interface NodeConformanceRecord {
+  nodeId: string;
+  title: string;
+  kind: string;
+  observed: boolean;
+  spanIds: string[];
+  attemptCount: number;
+  status: "ok" | "error" | "missing";
+  latencyMs: number | null;
+  missingTelemetry: string[];
+}
+
+export interface UnmappedSpanRecord {
+  spanId: string;
+  name: string;
+  reason: string;
+}
+
+export interface DependencyRecord {
+  type: "fan_in" | "fan_out" | "cross_run_link";
+  description: string;
+}
+
+export interface CriticalPathRecord {
+  nodeIds: string[];
+  totalLatencyMs: number;
+}
+
+export interface DslConformanceSummary {
+  available: boolean;
+  message: string;
+  loopId: string;
+  loopVersion: string;
+  loopTitle: string;
+  outcomes: LoopDefinitionOutcome[];
+  declaredNodes: LoopDefinitionNode[];
+  declaredEdges: LoopDefinitionEdge[];
+  observedEdges: ObservedExecutionEdge[];
+  nodeStates: NodeConformanceRecord[];
+  declaredNotObserved: string[];
+  unmappedSpans: UnmappedSpanRecord[];
+  dependencyRecords: DependencyRecord[];
+  criticalPath: CriticalPathRecord | null;
+  criticalPathReason: string | null;
 }

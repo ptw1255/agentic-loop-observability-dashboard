@@ -47,6 +47,18 @@ The loop view turns a trace into a review artifact: trace identity, latency, exe
 
 The images above are captured from the running product with Playwright’s WebKit engine, the Safari-compatible automation target. Recreate them locally with `npm run capture:snapshots`.
 
+### Interaction model
+
+The interface is deliberately organized around rows and columns:
+
+- top navigation links move between review, loop execution, and evidence views;
+- KPI columns summarize the current pilot without hiding denominators;
+- the output inbox is a scan-first table with one row per output;
+- selecting an output opens its detail record without losing the queue context;
+- review, PR, trace, and evidence controls are plain text actions with explicit labels;
+- execution and conformance data use side-by-side columns and tabular evidence;
+- status is communicated with text and small state markers, not decorative button chrome.
+
 ## Core surfaces
 
 | Surface | What it answers |

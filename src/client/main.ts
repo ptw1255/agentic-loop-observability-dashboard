@@ -483,29 +483,43 @@ function renderList(): void {
   }
 
   const selectedId = state.selectedOutputId;
-  elements.outputList.innerHTML = outputs
-    .map(
-      (output) => `
-        <button class="output-card ${output.outputId === selectedId ? "is-selected" : ""}" data-output-id="${output.outputId}">
-          <div class="output-card__topline">
-            <span class="pill pill--status pill--${output.status}">${formatLabel(output.status)}</span>
-            <span class="muted">v${output.currentVersion}</span>
-          </div>
-          <h2>${escapeHtml(output.title)}</h2>
-          <p>${escapeHtml(output.summary)}</p>
-          <dl class="metrics-row">
-            <div><dt>Artifacts</dt><dd>${output.artifactCount}</dd></div>
-            <div><dt>Actions</dt><dd>${output.openActionCount}</dd></div>
-            <div><dt>Run</dt><dd>${escapeHtml(output.runId ?? "not linked")}</dd></div>
-          </dl>
-          <div class="output-card__footer">
-            <span>${escapeHtml(output.creator)}</span>
-            <span>${formatDateTime(output.updatedAt)}</span>
-          </div>
-        </button>
-      `
-    )
-    .join("");
+  elements.outputList.innerHTML = `
+    <div class="table-wrap">
+      <table class="output-table">
+        <thead>
+          <tr>
+            <th scope="col">State</th>
+            <th scope="col">Output</th>
+            <th scope="col">Version</th>
+            <th scope="col">Actions</th>
+            <th scope="col">Run</th>
+            <th scope="col">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${outputs
+            .map(
+              (output) => `
+                <tr class="output-row ${output.outputId === selectedId ? "is-selected" : ""}">
+                  <td><span class="status-label status-label--${output.status}">${formatLabel(output.status)}</span></td>
+                  <td>
+                    <button class="output-row__link" data-output-id="${output.outputId}">
+                      <strong>${escapeHtml(output.title)}</strong>
+                      <span>${escapeHtml(output.summary)}</span>
+                    </button>
+                  </td>
+                  <td>v${output.currentVersion}</td>
+                  <td>${output.openActionCount}</td>
+                  <td class="table-code">${escapeHtml(output.runId ?? "not linked")}</td>
+                  <td>${formatDateTime(output.updatedAt)}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 
   elements.outputList.querySelectorAll<HTMLButtonElement>("[data-output-id]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -623,7 +637,7 @@ function renderDetail(): void {
     </section>
 
     <section class="panel-grid">
-      <section class="panel">
+      <section id="execution-observability" class="panel">
         <h3>Execution observability</h3>
         <p class="muted">Trace evidence is optional to local review. When Phoenix is reachable, the run stays deep-linkable to spans and evaluations.</p>
         <div class="decision-actions">
@@ -941,7 +955,7 @@ function renderArtifactPanel(artifact: ArtifactRecord): string {
   const treeMarkup = renderTreeNode(jsonData, "$", state.artifactPathFilter);
 
   return `
-    <section class="panel artifact-panel">
+    <section id="json-evidence" class="panel artifact-panel">
       <div class="artifact-panel__header">
         <div>
           <h3>${escapeHtml(artifact.label)}</h3>

@@ -15,10 +15,31 @@
   <body>
     <div class="shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Local-first review surface</p>
-          <h1>Agentic Loop Observability Dashboard</h1>
+        <div class="brand-lockup">
+          <strong>ALO</strong>
+          <span>Agentic Loop Observatory</span>
         </div>
+        <nav class="primary-nav" aria-label="Dashboard views">
+          <a href="#output-review" class="primary-nav__link primary-nav__link--active">Output review</a>
+          <a href="#execution-observability" class="primary-nav__link">Loop execution</a>
+          <a href="#json-evidence" class="primary-nav__link">Evidence</a>
+        </nav>
+        <a href="#output-review" class="topbar__link">Open current view</a>
+      </header>
+
+      <section class="viewbar">
+        <div>
+          <h1>Output review</h1>
+          <span data-role="status">Loading local state...</span>
+        </div>
+        <div class="viewbar__links" aria-label="Output filters">
+          <a href="#output-review" class="viewbar__link viewbar__link--active">All</a>
+          <a href="#output-review" class="viewbar__link">Awaiting review</a>
+          <a href="#output-review" class="viewbar__link">Needs changes</a>
+        </div>
+      </section>
+
+      <section class="summarybar" aria-label="Pilot summary">
         <div class="topbar__metrics" data-role="pilot-metrics" aria-live="polite"></div>
         <div class="toolbar">
           <button data-action="diagnostics" class="toolbar-button">Download diagnostics</button>
@@ -28,13 +49,13 @@
             <input id="restoreFile" type="file" accept="application/json" />
           </label>
         </div>
-      </header>
+      </section>
 
-      <div class="statusbar">
-        <span data-role="status">Loading local state...</span>
+      <div class="statusbar" aria-live="polite">
+        <span>Local state and cached evidence are the source of truth for this view.</span>
       </div>
 
-      <main class="layout">
+      <main id="output-review" class="layout">
         <aside class="sidebar">
           <div class="sidebar__header">
             <p class="eyebrow">Inbox</p>

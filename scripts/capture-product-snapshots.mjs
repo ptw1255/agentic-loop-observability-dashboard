@@ -21,11 +21,15 @@ await page.screenshot({
   fullPage: false
 });
 
+await page.getByText("Execution evidence", { exact: true }).click();
 await page.getByRole("button", { name: "Run traced demo" }).click();
-await page.getByText("Observed execution", { exact: true }).waitFor();
 await page.waitForTimeout(2500);
+await page.getByText("Execution evidence", { exact: true }).click();
+await page.getByText("Observed execution", { exact: true }).waitFor();
 await page.getByRole("button", { name: "Refresh observability" }).click();
 await page.waitForTimeout(1200);
+await page.getByText("Execution evidence", { exact: true }).click();
+await page.getByText("Observed execution", { exact: true }).waitFor();
 const observabilityPanel = page.getByRole("heading", { name: "Execution observability" }).locator("..");
 await observabilityPanel.screenshot({
   path: path.join(outputDir, "loop-detail-webkit.png")

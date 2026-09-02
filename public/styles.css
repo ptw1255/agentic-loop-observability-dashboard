@@ -268,6 +268,36 @@ a:hover {
   overflow-x: auto;
 }
 
+.sidebar .output-table {
+  min-width: 0;
+}
+
+.sidebar .output-table th:nth-child(1) {
+  width: 92px;
+}
+
+.sidebar .output-table th:nth-child(2) {
+  width: auto;
+}
+
+.sidebar .output-table th:nth-child(3) {
+  width: 92px;
+}
+
+.queue-summary {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+  color: var(--muted);
+}
+
+.queue-summary strong {
+  color: var(--text);
+  font-size: 1.2rem;
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -379,6 +409,80 @@ code {
 .hero-card h1 {
   font-size: clamp(1.8rem, 3vw, 2.7rem);
   line-height: 1.03;
+}
+
+.action-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 24px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--text);
+  background: var(--surface);
+}
+
+.action-hero h1 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  letter-spacing: -0.04em;
+  line-height: 1.03;
+}
+
+.action-hero__status {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  border-left: 3px solid var(--accent);
+  padding-left: 14px;
+}
+
+.action-hero__status strong {
+  font-size: 1.05rem;
+}
+
+.action-hero__status > span:last-child {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.action-panel {
+  border-top: 2px solid var(--accent);
+}
+
+.secondary-detail {
+  border-top: 1px solid var(--line-strong);
+}
+
+.secondary-detail > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 2px;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.secondary-detail > summary::after {
+  color: var(--muted);
+  content: "Open";
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.secondary-detail[open] > summary::after {
+  content: "Close";
+}
+
+.secondary-detail[open] > .panel,
+.secondary-detail[open] > .panel-grid {
+  margin-bottom: 18px;
+}
+
+.panel-grid--disclosed {
+  padding-top: 2px;
 }
 
 .hero-card__metrics {
@@ -827,7 +931,8 @@ a {
 @media (max-width: 950px) {
   .layout,
   .panel-grid,
-  .hero-card {
+  .hero-card,
+  .action-hero {
     grid-template-columns: 1fr;
   }
 

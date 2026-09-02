@@ -34,27 +34,30 @@
           <span data-role="status">Loading local state...</span>
         </div>
         <div class="viewbar__links" aria-label="Output filters">
-          <a href="#output-review" class="viewbar__link viewbar__link--active">All</a>
-          <a href="#output-review" class="viewbar__link">Awaiting review</a>
-          <a href="#output-review" class="viewbar__link">Needs changes</a>
-        </div>
-      </section>
-
-      <section class="summarybar" aria-label="Pilot summary">
-        <div class="topbar__metrics" data-role="pilot-metrics" aria-live="polite"></div>
-        <div class="toolbar">
-          <button data-action="diagnostics" class="toolbar-button">Download diagnostics</button>
-          <button data-action="export" class="toolbar-button">Export state</button>
-          <label class="toolbar-button toolbar-button--file">
-            Restore state
-            <input id="restoreFile" type="file" accept="application/json" />
-          </label>
+          <a href="#output-review" data-output-filter="action" class="viewbar__link viewbar__link--active">Needs action</a>
+          <a href="#output-review" data-output-filter="review" class="viewbar__link">Review queue</a>
+          <a href="#output-review" data-output-filter="all" class="viewbar__link">All outputs</a>
         </div>
       </section>
 
       <div class="statusbar" aria-live="polite">
-        <span>Local state and cached evidence are the source of truth for this view.</span>
+        <span>Start with what needs a decision or follow-up. Open evidence only when the action needs support.</span>
       </div>
+
+      <details class="utility-disclosure">
+        <summary>Workspace metrics and tools</summary>
+        <section class="summarybar" aria-label="Pilot summary">
+          <div class="topbar__metrics" data-role="pilot-metrics" aria-live="polite"></div>
+          <div class="toolbar">
+            <button data-action="diagnostics" class="toolbar-button">Download diagnostics</button>
+            <button data-action="export" class="toolbar-button">Export state</button>
+            <label class="toolbar-button toolbar-button--file">
+              Restore state
+              <input id="restoreFile" type="file" accept="application/json" />
+            </label>
+          </div>
+        </section>
+      </details>
 
       <main id="output-review" class="layout">
         <aside class="sidebar">

@@ -37,7 +37,7 @@ The current seeded pilot contains 20 representative outputs across draft, awaiti
 
 ![WebKit-rendered review inbox](docs/snapshots/inbox-webkit.png)
 
-The inbox makes review priority legible immediately: state counts, denominator-based pilot metrics, and the selected output’s decision and implementation context are visible together.
+The landing inbox is action-first: it defaults to outputs needing a decision, follow-up, stale-state refresh, or PR-sync remediation. The selected item leads with the next step; implementation context, decision history, execution evidence, PR history, and output evidence open only when needed.
 
 ### Snapshot: loop detail
 
@@ -65,8 +65,9 @@ The interface is deliberately organized around rows and columns:
 
 - top navigation links move between review, loop execution, and evidence views;
 - KPI columns summarize the current pilot without hiding denominators;
-- the output inbox is a scan-first table with one row per output;
+- the landing output inbox defaults to a scan-first table of items needing action, with review and all-output filters available;
 - selecting an output opens its detail record without losing the queue context;
+- the selected output leads with one next-step panel and keeps secondary context behind explicit disclosures;
 - the loop execution command center adds time-window filters and KPI-driven run focus;
 - the time-accounting window separates nested span time into model, tool, orchestration, evaluator, and explicit wait categories;
 - review, PR, trace, and evidence controls are plain text actions with explicit labels;

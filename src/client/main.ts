@@ -260,6 +260,7 @@ const state = {
   data: null as DashboardData | null,
   selectedOutputId: null as string | null,
   selectedArtifactId: null as string | null,
+  outputFilter: "action" as "action" | "review" | "all",
   artifactView: "compact" as "compact" | "table" | "tree" | "raw",
   artifactPathFilter: "",
   observability: null as ObservabilitySummary | null,
@@ -302,6 +303,15 @@ async function loadDashboard(outputId?: string): Promise<void> {
     state.observability = null;
     state.conformance = null;
     setStatus(`Local snapshot refreshed ${formatDateTime(state.data.generatedAt)}`);
+
+    if (!outputId && state.outputFilter === "action") {
+      const firstAction = state.data.outputs.find(requiresAction);
+      if (firstAction && firstAction.outputId !== state.selectedOutputId) {
+        void loadDashboard(firstAction.outputId);
+        return;
+      }
+    }
+
     render();
     schedulePullRequestPolling();
     if (state.selectedOutputId) {
@@ -471,12 +481,17 @@ function renderList(): void {
     return;
   }
 
-  const outputs = state.data?.outputs ?? [];
+  const allOutputs = state.data?.outputs ?? [];
+  const outputs = allOutputs.filter((output) => {
+    if (state.outputFilter === "all") return true;
+    if (state.outputFilter === "review") return output.status === "awaiting_review" || output.status === "needs_changes";
+    return requiresAction(output);
+  });
   if (outputs.length === 0) {
     elements.outputList.innerHTML = `
       <div class="empty-state">
-        <h2>No outputs yet</h2>
-        <p>Create or ingest an output to make the review inbox useful.</p>
+        <h2>No action required</h2>
+        <p>Nothing in the current workspace needs a decision, follow-up, or remediation.</p>
       </div>
     `;
     return;
@@ -484,15 +499,13 @@ function renderList(): void {
 
   const selectedId = state.selectedOutputId;
   elements.outputList.innerHTML = `
+    <div class="queue-summary"><strong>${outputs.length}</strong><span>of ${allOutputs.length} outputs need attention in this view</span></div>
     <div class="table-wrap">
       <table class="output-table">
         <thead>
           <tr>
-            <th scope="col">State</th>
+            <th scope="col">Signal</th>
             <th scope="col">Output</th>
-            <th scope="col">Version</th>
-            <th scope="col">Actions</th>
-            <th scope="col">Run</th>
             <th scope="col">Updated</th>
           </tr>
         </thead>
@@ -501,16 +514,13 @@ function renderList(): void {
             .map(
               (output) => `
                 <tr class="output-row ${output.outputId === selectedId ? "is-selected" : ""}">
-                  <td><span class="status-label status-label--${output.status}">${formatLabel(output.status)}</span></td>
+                  <td><span class="status-label status-label--${output.status}">${escapeHtml(actionSignal(output))}</span></td>
                   <td>
                     <button class="output-row__link" data-output-id="${output.outputId}">
                       <strong>${escapeHtml(output.title)}</strong>
-                      <span>${escapeHtml(output.summary)}</span>
+                      <span>${escapeHtml(actionSummary(output))}</span>
                     </button>
                   </td>
-                  <td>v${output.currentVersion}</td>
-                  <td>${output.openActionCount}</td>
-                  <td class="table-code">${escapeHtml(output.runId ?? "not linked")}</td>
                   <td>${formatDateTime(output.updatedAt)}</td>
                 </tr>
               `
@@ -521,6 +531,8 @@ function renderList(): void {
     </div>
   `;
 
+  updateOutputFilterLinks();
+
   elements.outputList.querySelectorAll<HTMLButtonElement>("[data-output-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const outputId = button.dataset.outputId;
@@ -528,6 +540,60 @@ function renderList(): void {
         void loadDashboard(outputId);
       }
     });
+  });
+}
+
+function requiresAction(output: OutputListItem): boolean {
+  return output.status === "awaiting_review" || output.status === "needs_changes" || output.openActionCount > 0 || output.staleReason !== null || (output.pullRequestSyncState !== null && output.pullRequestSyncState !== "sync_ok");
+}
+
+function actionSignal(output: OutputListItem): string {
+  if (output.status === "awaiting_review") return "Review";
+  if (output.status === "needs_changes") return "Changes";
+  if (output.openActionCount > 0) return "Follow-up";
+  if (output.staleReason) return "Stale";
+  return "Sync";
+}
+
+function actionSummary(output: OutputListItem): string {
+  const signals: string[] = [];
+  if (output.status === "awaiting_review") signals.push("Review this output");
+  if (output.status === "needs_changes") signals.push("Resolve requested changes");
+  if (output.openActionCount > 0) signals.push(`${output.openActionCount} open action${output.openActionCount === 1 ? "" : "s"}`);
+  if (output.staleReason) signals.push("Refresh stale state");
+  if (output.pullRequestSyncState && output.pullRequestSyncState !== "sync_ok") signals.push("Check PR sync");
+  return signals.join(" · ");
+}
+
+function actionContext(output: OutputListItem): string {
+  const context: string[] = [];
+  if (output.runId) context.push("run linked");
+  if (output.pullRequestRepo && output.pullRequestNumber) context.push(`${output.pullRequestRepo} #${output.pullRequestNumber}`);
+  if (output.openActionCount > 0) context.push(`${output.openActionCount} open action${output.openActionCount === 1 ? "" : "s"}`);
+  return context.join(" · ") || "No supporting context linked yet";
+}
+
+function nextStepTitle(output: OutputListItem): string {
+  if (output.status === "awaiting_review") return "Review and decide";
+  if (output.status === "needs_changes") return "Resolve requested changes";
+  if (output.openActionCount > 0) return "Complete follow-up actions";
+  if (output.staleReason) return "Refresh stale evidence";
+  if (output.pullRequestSyncState && output.pullRequestSyncState !== "sync_ok") return "Resolve pull request sync";
+  return "Review this output";
+}
+
+function nextStepDescription(output: OutputListItem): string {
+  if (output.status === "awaiting_review") return "Confirm whether this output is acceptable, needs changes, or should be declined.";
+  if (output.status === "needs_changes") return "Use the evidence below only if you need to understand or validate the requested changes.";
+  if (output.openActionCount > 0) return "Work the open items before treating this output as complete.";
+  if (output.staleReason) return output.staleReason;
+  if (output.pullRequestSyncState && output.pullRequestSyncState !== "sync_ok") return "The pull request context needs attention before it can be trusted.";
+  return "Review the current output state and record the next decision.";
+}
+
+function updateOutputFilterLinks(): void {
+  document.querySelectorAll<HTMLAnchorElement>("[data-output-filter]").forEach((link) => {
+    link.classList.toggle("viewbar__link--active", link.dataset.outputFilter === state.outputFilter);
   });
 }
 
@@ -566,23 +632,29 @@ function renderDetail(): void {
   `;
 
   elements.detail.innerHTML = `
-    <section class="hero-card">
+    <section class="action-hero">
       <div>
-        <p class="eyebrow">Pilot loop ${escapeHtml(state.data?.pilotLoop.id ?? "")} · v${escapeHtml(state.data?.pilotLoop.version ?? "")}</p>
+        <p class="eyebrow">Action queue</p>
         <h1>${escapeHtml(detail.summary.title)}</h1>
         <p class="lede">${escapeHtml(detail.summary.summary)}</p>
       </div>
-      <div class="hero-card__metrics">
-        <div><span>Status</span><strong>${formatLabel(detail.summary.status)}</strong></div>
-        <div><span>Output version</span><strong>${detail.summary.currentVersion}</strong></div>
-        <div><span>Last update</span><strong>${formatDateTime(detail.summary.updatedAt)}</strong></div>
+      <div class="action-hero__status">
+        <span class="status-label status-label--${detail.summary.status}">${escapeHtml(formatLabel(detail.summary.status))}</span>
+        <strong>${escapeHtml(actionSummary(detail.summary) || "No immediate action")}</strong>
+        <span>${escapeHtml(actionContext(detail.summary))}</span>
       </div>
     </section>
 
-    <section class="panel-grid">
-      <section class="panel">
-        <h3>Review actions</h3>
-        <p class="muted">Human decisions are append-only and independent from pull request state.</p>
+    <section class="panel action-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Next step</p>
+          <h3>${escapeHtml(nextStepTitle(detail.summary))}</h3>
+          <p class="muted">${escapeHtml(nextStepDescription(detail.summary))}</p>
+        </div>
+        <span class="muted">v${detail.summary.currentVersion} · updated ${formatDateTime(detail.summary.updatedAt)}</span>
+      </div>
+      <div>
         <div class="decision-actions">
           <button data-decision-state="accepted" class="action-button">Accept</button>
           <button data-decision-state="needs_changes" class="action-button">Needs changes</button>
@@ -596,48 +668,61 @@ function renderDetail(): void {
           <span>Rationale</span>
           <textarea id="rationale" rows="4" placeholder="Required for decline or supersede. Optional for accept.">${escapeHtml(elements.rationaleInput?.value || "")}</textarea>
         </label>
+      </div>
       </section>
 
-      <section class="panel">
-        <h3>Implementation context</h3>
-        <dl class="stacked-list">
-          <div><dt>Run ID</dt><dd>${escapeHtml(detail.summary.runId ?? "Not linked yet")}</dd></div>
-          <div><dt>Trace project</dt><dd>${escapeHtml(detail.runLink?.phoenixProject ?? "No Phoenix project linked")}</dd></div>
-          <div><dt>PR summary</dt><dd>${renderPrSummary(detail)}</dd></div>
-          <div><dt>Sync state</dt><dd>${renderPullRequestSyncState(detail)}</dd></div>
-          <div><dt>Staleness</dt><dd>${escapeHtml(detail.summary.staleReason ?? "Fresh local snapshot")}</dd></div>
-        </dl>
-        <div class="decision-actions">
-          <button data-action="sync-pr" class="action-button">Sync PR now</button>
-        </div>
-        <label class="field">
-          <span>Repository</span>
-          <input id="pullRequestRepo" type="text" value="${escapeHtml(detail.summary.pullRequestRepo ?? "")}" placeholder="ptw1255/factorio" />
-        </label>
-        <label class="field">
-          <span>PR number</span>
-          <input id="pullRequestNumber" type="number" min="1" value="${detail.summary.pullRequestNumber ?? ""}" />
-        </label>
-        <div class="decision-actions">
-          <button data-action="link-pr" class="action-button">Link PR</button>
-        </div>
-      </section>
-    </section>
+    ${detail.actions.length > 0 ? `
+    <section class="panel action-panel">
+      <div class="section-heading">
+        <div><p class="eyebrow">Follow-up</p><h3>Open action items</h3></div>
+        <span class="muted">${detail.actions.length} remaining</span>
+      </div>
+      ${renderActionItems(detail)}
+    </section>` : ""}
 
-    <section class="panel-grid">
-      <section class="panel">
-        <h3>Action items</h3>
-        ${renderActionItems(detail)}
+    <details class="secondary-detail">
+      <summary>Implementation context</summary>
+      <section class="panel-grid panel-grid--disclosed">
+        <section class="panel">
+          <h3>Pull request and run</h3>
+          <dl class="stacked-list">
+            <div><dt>Run ID</dt><dd>${escapeHtml(detail.summary.runId ?? "Not linked yet")}</dd></div>
+            <div><dt>Trace project</dt><dd>${escapeHtml(detail.runLink?.phoenixProject ?? "No Phoenix project linked")}</dd></div>
+            <div><dt>PR summary</dt><dd>${renderPrSummary(detail)}</dd></div>
+            <div><dt>Sync state</dt><dd>${renderPullRequestSyncState(detail)}</dd></div>
+            <div><dt>Staleness</dt><dd>${escapeHtml(detail.summary.staleReason ?? "Fresh local snapshot")}</dd></div>
+          </dl>
+          <div class="decision-actions">
+            <button data-action="sync-pr" class="action-button">Sync PR now</button>
+          </div>
+        </section>
+        <section class="panel">
+          <h3>Link a pull request</h3>
+          <label class="field">
+            <span>Repository</span>
+            <input id="pullRequestRepo" type="text" value="${escapeHtml(detail.summary.pullRequestRepo ?? "")}" placeholder="ptw1255/factorio" />
+          </label>
+          <label class="field">
+            <span>PR number</span>
+            <input id="pullRequestNumber" type="number" min="1" value="${detail.summary.pullRequestNumber ?? ""}" />
+          </label>
+          <div class="decision-actions">
+            <button data-action="link-pr" class="action-button">Link PR</button>
+          </div>
+        </section>
       </section>
+    </details>
 
+    <details class="secondary-detail">
+      <summary>Decision history (${detail.decisions.length})</summary>
       <section class="panel">
-        <h3>Decision ledger</h3>
         ${renderDecisionLedger(detail)}
       </section>
-    </section>
+    </details>
 
-    <section class="panel-grid">
-      <section id="execution-observability" class="panel panel--wide">
+    <details class="secondary-detail">
+      <summary>Execution evidence</summary>
+      <section id="execution-observability" class="panel">
         <h3>Execution observability</h3>
         <p class="muted">Trace evidence is optional to local review. When Phoenix is reachable, the run stays deep-linkable to spans and evaluations.</p>
         <div class="decision-actions">
@@ -646,25 +731,28 @@ function renderDetail(): void {
         </div>
         ${renderObservability(detail)}
       </section>
-
-      <section class="panel panel--wide">
+      <section class="panel">
         <h3>Telemetry coverage</h3>
         ${renderCoverage(detail)}
       </section>
-    </section>
+      <section class="panel">
+        <h3>DSL conformance</h3>
+        <p class="muted">Declared workflow edges stay separate from observed execution edges. Critical path is withheld whenever graph or timing completeness is insufficient.</p>
+        ${renderConformance()}
+      </section>
+    </details>
 
-    <section class="panel">
-      <h3>Observed PR history</h3>
-      ${renderPrHistory(detail)}
-    </section>
+    <details class="secondary-detail">
+      <summary>Pull request history</summary>
+      <section class="panel">
+        ${renderPrHistory(detail)}
+      </section>
+    </details>
 
-    <section class="panel">
-      <h3>DSL conformance</h3>
-      <p class="muted">Declared workflow edges stay separate from observed execution edges. Critical path is withheld whenever graph or timing completeness is insufficient.</p>
-      ${renderConformance()}
-    </section>
-
-    ${artifactPanel}
+    <details class="secondary-detail">
+      <summary>Output evidence</summary>
+      ${artifactPanel}
+    </details>
   `;
 
   wireDecisionButtons(detail.summary.outputId);
@@ -1463,6 +1551,23 @@ elements.restoreInput?.addEventListener("change", () => {
   if (file) {
     void restoreState(file);
   }
+});
+
+document.querySelectorAll<HTMLAnchorElement>("[data-output-filter]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    state.outputFilter = link.dataset.outputFilter as typeof state.outputFilter;
+    const visible = (state.data?.outputs ?? []).filter((output) => state.outputFilter === "all" || state.outputFilter === "review"
+      ? state.outputFilter === "all" || output.status === "awaiting_review" || output.status === "needs_changes"
+      : requiresAction(output));
+    const selectedIsVisible = visible.some((output) => output.outputId === state.selectedOutputId);
+    if (!selectedIsVisible && visible[0]) {
+      void loadDashboard(visible[0].outputId);
+      return;
+    }
+    updateOutputFilterLinks();
+    render();
+  });
 });
 
 window.addEventListener("hashchange", () => {

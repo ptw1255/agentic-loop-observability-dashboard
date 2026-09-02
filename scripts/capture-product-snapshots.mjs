@@ -22,7 +22,7 @@ await page.screenshot({
 });
 
 await page.getByRole("button", { name: "Run traced demo" }).click();
-await page.getByText("Execution outline", { exact: true }).waitFor();
+await page.getByText("Observed execution", { exact: true }).waitFor();
 await page.waitForTimeout(2500);
 await page.getByRole("button", { name: "Refresh observability" }).click();
 await page.waitForTimeout(1200);

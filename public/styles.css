@@ -444,6 +444,10 @@ code {
   min-width: 0;
 }
 
+.panel--wide {
+  grid-column: 1 / -1;
+}
+
 .panel-grid--tight {
   gap: 14px;
 }
@@ -587,6 +591,94 @@ a:focus-visible {
   border-top: 1px solid var(--line);
   vertical-align: top;
   text-align: left;
+}
+
+.observability-meta-table,
+.observability-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.observability-meta-table th,
+.observability-meta-table td,
+.observability-table th,
+.observability-table td {
+  border-top: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.observability-meta-table tr:first-child th,
+.observability-meta-table tr:first-child td,
+.observability-table thead th {
+  border-top: 0;
+}
+
+.observability-meta-table th {
+  width: 92px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.observability-meta-table td {
+  font-weight: 600;
+}
+
+.observability-table {
+  min-width: 820px;
+  table-layout: fixed;
+}
+
+.observability-table th {
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.observability-table th:nth-child(1) { width: 42px; }
+.observability-table th:nth-child(2) { width: 100px; }
+.observability-table th:nth-child(3) { width: 175px; }
+.observability-table th:nth-child(4) { width: 95px; }
+.observability-table th:nth-child(5) { width: 75px; }
+.observability-table th:nth-child(6) { width: 75px; }
+.observability-table th:nth-child(7) { width: 110px; }
+
+.observability-table__error td {
+  background: #fff3f1;
+  color: var(--danger);
+}
+
+.observability-table__subtext {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+.observability-section {
+  margin-top: 16px;
+}
+
+.observability-section__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line-strong);
+  padding-bottom: 6px;
+}
+
+.observability-section__header h4 {
+  margin: 0;
 }
 
 .json-raw {

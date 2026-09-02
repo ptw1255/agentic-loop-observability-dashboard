@@ -637,7 +637,7 @@ function renderDetail(): void {
     </section>
 
     <section class="panel-grid">
-      <section id="execution-observability" class="panel">
+      <section id="execution-observability" class="panel panel--wide">
         <h3>Execution observability</h3>
         <p class="muted">Trace evidence is optional to local review. When Phoenix is reachable, the run stays deep-linkable to spans and evaluations.</p>
         <div class="decision-actions">
@@ -647,7 +647,7 @@ function renderDetail(): void {
         ${renderObservability(detail)}
       </section>
 
-      <section class="panel">
+      <section class="panel panel--wide">
         <h3>Telemetry coverage</h3>
         ${renderCoverage(detail)}
       </section>
@@ -776,51 +776,61 @@ function renderObservability(detail: OutputDetail): string {
     return `<p class="muted">${runLink?.runId ? "Observability is available to load for this run." : "No linked run found for this output yet."}</p>`;
   }
 
-  const outlineMarkup = observability.outline.length === 0
-    ? `<p class="muted">No observed span outline yet.</p>`
-    : `<ol class="timeline">${observability.outline.map((item) => `<li><p>${escapeHtml(item)}</p></li>`).join("")}</ol>`;
-
-  const treeMarkup = observability.tree.length === 0
-    ? `<p class="muted">No parent-child span tree rendered yet.</p>`
-    : `<ul class="tree-list">${observability.tree.map(renderObservedTree).join("")}</ul>`;
+  const orderedSpans = [...observability.spans].sort((left, right) => (left.startTime ?? "").localeCompare(right.startTime ?? ""));
+  const spanMarkup = orderedSpans.length === 0
+    ? `<p class="muted">No observed spans returned for this run.</p>`
+    : `
+      <div class="table-wrap">
+        <table class="observability-table">
+          <thead>
+            <tr><th scope="col">#</th><th scope="col">DSL node</th><th scope="col">Span</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Latency</th><th scope="col">Parent</th></tr>
+          </thead>
+          <tbody>
+            ${orderedSpans.map((span, index) => `
+              <tr class="${span.statusCode === "ERROR" ? "observability-table__error" : ""}">
+                <td>${index + 1}</td>
+                <td>${escapeHtml(typeof span.attributes["alo.dsl.node_id"] === "string" ? span.attributes["alo.dsl.node_id"] : "unmapped")}</td>
+                <td><strong>${escapeHtml(span.name)}</strong><span class="observability-table__subtext">${escapeHtml(formatShortId(span.spanId))}</span></td>
+                <td>${escapeHtml(span.spanKind)}</td>
+                <td>${escapeHtml(span.statusCode)}</td>
+                <td>${span.latencyMs == null ? "n/a" : `${span.latencyMs}ms`}</td>
+                <td>${escapeHtml(span.parentId ? formatShortId(span.parentId) : "root")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
 
   const annotationsMarkup = observability.annotations.length === 0
     ? `<p class="muted">No Phoenix annotations or evaluations were returned for this run.</p>`
     : `
-      <ul class="simple-list">
-        ${observability.annotations.map((annotation) => `
-          <li>
-            <div class="timeline__row">
-              <strong>${escapeHtml(annotation.name)}</strong>
-              <span class="muted">${escapeHtml(annotation.label ?? "unlabeled")} · ${escapeHtml(annotation.annotatorKind ?? "unknown annotator")}</span>
-            </div>
-            <p>${escapeHtml(annotation.explanation ?? "No explanation attached.")}</p>
-          </li>
-        `).join("")}
-      </ul>
+      <div class="table-wrap">
+        <table class="observability-table">
+          <thead><tr><th scope="col">Annotation</th><th scope="col">Label</th><th scope="col">Score</th><th scope="col">Kind</th><th scope="col">Explanation</th></tr></thead>
+          <tbody>${observability.annotations.map((annotation) => `
+            <tr><td><strong>${escapeHtml(annotation.name)}</strong></td><td>${escapeHtml(annotation.label ?? "unlabeled")}</td><td>${annotation.score == null ? "n/a" : annotation.score.toFixed(2)}</td><td>${escapeHtml(annotation.annotatorKind ?? "unknown")}</td><td>${escapeHtml(annotation.explanation ?? "No explanation attached.")}</td></tr>
+          `).join("")}</tbody>
+        </table>
+      </div>
     `;
 
   return `
-    <dl class="stacked-list">
-      <div><dt>Status</dt><dd>${escapeHtml(observability.message)}</dd></div>
-      <div><dt>Project</dt><dd>${escapeHtml(observability.projectName)}</dd></div>
-      <div><dt>Run</dt><dd>${escapeHtml(observability.runId ?? runLink?.runId ?? "Not linked")}</dd></div>
-      <div><dt>Session</dt><dd>${escapeHtml(observability.sessionId ?? runLink?.sessionId ?? "Not recorded")}</dd></div>
-      <div><dt>Trace</dt><dd>${renderLink(observability.traceLink, observability.traceId ?? "Trace unavailable")}</dd></div>
-      <div><dt>Root span</dt><dd>${renderLink(observability.spanLink, observability.rootSpanId ?? "Root span unavailable")}</dd></div>
-    </dl>
-    <div class="panel-grid panel-grid--tight">
-      <section class="panel panel--nested">
-        <h4>Execution outline</h4>
-        ${outlineMarkup}
-      </section>
-      <section class="panel panel--nested">
-        <h4>Span tree</h4>
-        ${treeMarkup}
-      </section>
+    <div class="table-wrap">
+      <table class="observability-meta-table">
+        <tbody>
+          <tr><th scope="row">Status</th><td>${escapeHtml(observability.message)}</td><th scope="row">Project</th><td>${escapeHtml(observability.projectName)}</td></tr>
+          <tr><th scope="row">Run</th><td class="table-code">${escapeHtml(observability.runId ?? runLink?.runId ?? "Not linked")}</td><th scope="row">Session</th><td class="table-code">${escapeHtml(observability.sessionId ?? runLink?.sessionId ?? "Not recorded")}</td></tr>
+          <tr><th scope="row">Trace</th><td>${renderLink(observability.traceLink, observability.traceId ?? "Trace unavailable")}</td><th scope="row">Root span</th><td>${renderLink(observability.spanLink, observability.rootSpanId ?? "Root span unavailable")}</td></tr>
+        </tbody>
+      </table>
     </div>
-    <section class="panel panel--nested">
-      <h4>Annotations and evaluations</h4>
+    <section class="observability-section">
+      <div class="observability-section__header"><h4>Observed execution</h4><span class="muted">${orderedSpans.length} spans · ordered by start time</span></div>
+      ${spanMarkup}
+    </section>
+    <section class="observability-section">
+      <div class="observability-section__header"><h4>Annotations and evaluations</h4><span class="muted">${observability.annotations.length} returned</span></div>
       ${annotationsMarkup}
     </section>
   `;
@@ -932,6 +942,10 @@ function renderObservedTree(node: ObservabilityTreeNode): string {
       ${node.children.length ? `<ul class="tree-list">${node.children.map(renderObservedTree).join("")}</ul>` : ""}
     </li>
   `;
+}
+
+function formatShortId(value: string): string {
+  return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
 }
 
 function renderDivergenceSummary(conformance: DslConformanceSummary): string {

@@ -35,54 +35,17 @@ The current seeded pilot contains 20 representative outputs across draft, awaiti
 
 ### Snapshot: review inbox
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Agentic Loop Observability Dashboard                65% complete   Export   │
-│ Local-first review surface                              Diagnostics         │
-├───────────────────────┬─────────────────────────────────────────────────────┤
-│ INBOX                 │ Agentic Loop Observability PRD                      │
-│                       │ Outcome-centric PRD and wireframe bundle            │
-│ Awaiting review   5   │                                                     │
-│ Needs changes    3   │ STATUS  Awaiting review   VERSION 1   UPDATED today  │
-│ Accepted         5   │                                                     │
-│ Declined         3   │ ┌─ Review actions ─────┐ ┌─ Context ───────────────┐ │
-│ Draft            2   │ │ Accept               │ │ Run ID                  │ │
-│ Superseded       2   │ │ Needs changes       │ │ Phoenix project         │ │
-│                       │ │ Decline             │ │ PR + sync state         │ │
-│ Agentic Loop PRD     │ └─────────────────────┘ └───────────────────────────┘ │
-│ Awaiting review      │                                                     │
-│ Accepted PR adapter  │ ACTION ITEMS              DECISION LEDGER             │
-│ Coverage math        │ □ Confirm evidence       No human decision yet       │
-└───────────────────────┴─────────────────────────────────────────────────────┘
-```
+![WebKit-rendered review inbox](docs/snapshots/inbox-webkit.png)
+
+The inbox makes review priority legible immediately: state counts, denominator-based pilot metrics, and the selected output’s decision and implementation context are visible together.
 
 ### Snapshot: loop detail
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ EXECUTION OBSERVABILITY                                                     │
-│ Trace loaded · run / session / output IDs linked                            │
-│ [Run traced demo] [Refresh observability]                                  │
-│                                                                             │
-│ Execution outline                     Span tree                             │
-│ 1  root · implement-change-run        root · implement-change-run            │
-│ 2  plan · plan · 49ms                    ├─ plan · plan                     │
-│ 3  plan · fetch-context · 21ms           │  └─ fetch-context                │
-│ 4  code · code · 31ms                    ├─ code · code                     │
-│ 5  test · lint · 18ms                    ├─ test                             │
-│ 6  review · review · 22ms                │  ├─ lint                          │
-│ 7  output · output · 16ms                │  └─ unit-test-flaky               │
-│                                           └─ output · output                 │
-│                                                                             │
-│ TELEMETRY COVERAGE                    DSL CONFORMANCE                       │
-│ alo.run_id             observed       Declared nodes vs observed nodes      │
-│ alo.output_id          observed       Mapped: 6   Missing: 1                 │
-│ alo.dsl.node_id        observed       Divergence is explicit                │
-│ phoenix.span_annotations degraded    Critical path withheld if incomplete   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+![WebKit-rendered execution observability panel](docs/snapshots/loop-detail-webkit.png)
 
-These snapshots describe the product’s review surfaces and seeded states. The UI is rendered as semantic HTML, CSS, and TypeScript from the local app; runtime image capture is an optional documentation artifact, not a dependency of the product.
+The loop view turns a trace into a review artifact: trace identity, latency, execution order, parent-child structure, tool failures, and evaluations are visible without leaving the output record.
+
+The images above are captured from the running product with Playwright’s WebKit engine, the Safari-compatible automation target. Recreate them locally with `npm run capture:snapshots`.
 
 ## Core surfaces
 

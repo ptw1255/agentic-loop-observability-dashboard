@@ -227,6 +227,91 @@ export interface ObservedSpan {
   attributes: Record<string, unknown>;
 }
 
+export type EvidenceState =
+  | "observed"
+  | "derived"
+  | "declared"
+  | "redacted"
+  | "not_instrumented"
+  | "unavailable"
+  | "not_applicable";
+
+export type TimeAccountingBucket = "model" | "tool" | "orchestration" | "evaluation" | "other" | "queue_wait";
+
+export interface TimeAccountingSpan extends ObservedSpan {
+  inclusiveDurationMs: number | null;
+  exclusiveDurationMs: number | null;
+  bucket: TimeAccountingBucket;
+  evidenceState: EvidenceState;
+  spanLink: string | null;
+}
+
+export interface TimeAccountingBreakdown {
+  wallClockMs: number | null;
+  modelMs: number | null;
+  toolMs: number | null;
+  orchestrationMs: number | null;
+  evaluationMs: number | null;
+  otherMs: number | null;
+  queueWaitMs: number | null;
+  accountedMs: number | null;
+  unaccountedMs: number | null;
+  criticalPathMs: number | null;
+  criticalPathNodeIds: string[];
+  timingCoveragePercentage: number | null;
+  state: EvidenceState;
+  detail: string;
+}
+
+export interface TimeAccountingMetric {
+  medianMs: number | null;
+  p95Ms: number | null;
+  totalMs: number | null;
+  runCount: number;
+  state: EvidenceState;
+}
+
+export interface TimeAccountingRun {
+  runId: string;
+  outputId: string;
+  title: string;
+  outputStatus: string;
+  updatedAt: string;
+  durationMs: number | null;
+  spanCount: number;
+  errorSpanCount: number;
+  traceState: "observed" | "degraded" | "not_linked";
+  traceId: string | null;
+  rootSpanId: string | null;
+  traceLink: string | null;
+  spanLink: string | null;
+  breakdown: TimeAccountingBreakdown;
+  spans: TimeAccountingSpan[];
+}
+
+export interface TimeAccountingData {
+  generatedAt: string;
+  window: "1h" | "24h" | "7d" | "all";
+  windowLabel: string;
+  windowStart: string | null;
+  summary: {
+    runsRecorded: number;
+    runsWithObservedTrace: number;
+    runsWithCompleteTiming: number;
+    wallClock: TimeAccountingMetric;
+    model: TimeAccountingMetric;
+    tool: TimeAccountingMetric;
+    orchestration: TimeAccountingMetric;
+    evaluation: TimeAccountingMetric;
+    other: TimeAccountingMetric;
+    queueWait: TimeAccountingMetric;
+    accounted: TimeAccountingMetric;
+    unaccounted: TimeAccountingMetric;
+  };
+  runs: TimeAccountingRun[];
+  selectedRun: TimeAccountingRun | null;
+}
+
 export interface ObservedSpanTreeNode {
   spanId: string;
   label: string;

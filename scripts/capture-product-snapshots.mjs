@@ -43,6 +43,14 @@ await commandCenter.locator('[data-role="execution-content"] .execution-kpis').w
 await commandCenter.getByRole("button", { name: /Needs attention/ }).click();
 await commandCenter.getByRole("heading", { name: "Runs" }).waitFor();
 
+const accounting = await context.newPage();
+await accounting.goto(`${baseUrl}/time-accounting.html?window=all`, { waitUntil: "networkidle" });
+await accounting.locator('[data-role="accounting-content"] .accounting-kpis').waitFor();
+await accounting.screenshot({
+  path: path.join(outputDir, "time-accounting-webkit.png"),
+  fullPage: true
+});
+
 await browser.close();
 
 console.log(`Captured WebKit product snapshots in ${outputDir}`);

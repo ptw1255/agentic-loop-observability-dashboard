@@ -77,6 +77,25 @@ Each instrumented DSL node should create or map to at least one span. Add custom
 | Model/tool detail | OpenInference semantic attributes |
 | Human/automated quality | Phoenix annotations/evaluations with annotator kind |
 
+## Time accounting model
+
+The dashboard treats the root span as the wall-clock boundary and calculates work from timestamp intervals. A parent span's inclusive duration is never added to its children. Instead, direct child intervals are subtracted from the parent to derive exclusive duration. Overlapping sibling intervals are merged before category totals are calculated.
+
+| Measure | Definition | Evidence state |
+| --- | --- | --- |
+| Wall clock | Root span end minus start | `derived` when root timestamps exist |
+| Inclusive duration | Span end minus start, or source latency when supplied | `observed` or `not_instrumented` |
+| Exclusive duration | Span interval minus the union of direct child intervals | `derived` when the span and child timestamps are complete |
+| Model time | Union of exclusive `LLM` intervals | `derived` when eligible timestamps exist |
+| Tool time | Union of exclusive `TOOL` intervals | `derived` when eligible timestamps exist |
+| Orchestration time | Union of exclusive `AGENT` and `CHAIN` intervals | `derived` when eligible timestamps exist |
+| Evaluation time | Union of exclusive `EVALUATOR` intervals | `derived` when eligible timestamps exist |
+| Accounted execution | Union of non-wait exclusive intervals | `derived` when all span timestamps are complete |
+| Unaccounted time | Wall clock minus accounted execution and explicit wait intervals | `derived` only with complete timing |
+| Queue/wait time | Explicit spans marked `alo.time.category: queue_wait` (or equivalent wait event) | `not_instrumented` until emitted |
+
+The time-accounting view exposes timing coverage, units, scope, aggregation, and evidence state with every metric. It does not infer queue time from gaps, estimate missing model/tool duration, or turn unavailable values into zero.
+
 ## Evidence status vocabulary
 
 Every metric or node claim has one of these statuses:

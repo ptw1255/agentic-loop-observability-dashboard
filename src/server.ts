@@ -12,6 +12,7 @@ import { readLoopExecutionData } from "./loop-execution.js";
 import { readDashboardData } from "./projections.js";
 import { seedDemoData } from "./seed.js";
 import { EventStore } from "./store.js";
+import { readTimeAccountingData } from "./time-accounting.js";
 import type { DecisionState } from "./types.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -93,6 +94,22 @@ app.get("/api/loop-execution", async (request, response) => {
       String(response.getHeader("x-request-id") ?? "")
     );
     response.status(500).json({ error: error instanceof Error ? error.message : "Loop execution query failed." });
+  }
+});
+
+app.get("/api/time-accounting", async (request, response) => {
+  const window = typeof request.query.window === "string" ? request.query.window : null;
+  const outputId = typeof request.query.outputId === "string" ? request.query.outputId : null;
+
+  try {
+    response.json(await readTimeAccountingData(db, rootDir, window, outputId));
+  } catch (error) {
+    logger.error(
+      "api.time_accounting.failed",
+      { window, outputId, error: error instanceof Error ? error.message : "unknown error" },
+      String(response.getHeader("x-request-id") ?? "")
+    );
+    response.status(500).json({ error: error instanceof Error ? error.message : "Time accounting query failed." });
   }
 });
 

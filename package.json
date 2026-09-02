@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "npm run build:client && npm run build:server",
-    "build:client": "esbuild src/client/main.ts --bundle --format=esm --target=es2022 --outfile=public/assets/app.js && esbuild src/client/loop-execution.ts --bundle --format=esm --target=es2022 --outfile=public/assets/loop-execution.js",
+    "build:client": "esbuild src/client/main.ts --bundle --format=esm --target=es2022 --outfile=public/assets/app.js && esbuild src/client/loop-execution.ts --bundle --format=esm --target=es2022 --outfile=public/assets/loop-execution.js && esbuild src/client/time-accounting.ts --bundle --format=esm --target=es2022 --outfile=public/assets/time-accounting.js",
     "build:server": "tsc -p tsconfig.server.json",
     "dev": "tsx watch src/server.ts",
     "capture:snapshots": "node scripts/capture-product-snapshots.mjs",

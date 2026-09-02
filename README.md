@@ -51,6 +51,12 @@ The loop view turns a trace into a review artifact: trace identity, latency, exe
 
 The dedicated command center is the fast path for operators. It starts with time-windowed KPIs, a compact health strip, and a run table. Selecting **Needs attention**, **Runs with errors**, **Trace coverage**, or **Median duration** narrows the table so an odd KPI becomes an actionable investigation queue. Selecting a run opens its trace, span, annotation, and DSL conformance detail alongside the table.
 
+### Snapshot: time accounting
+
+![WebKit-rendered time accounting dashboard](docs/snapshots/time-accounting-webkit.png)
+
+The time-accounting view answers a narrower operational question: where did the loop spend its time? It reports wall-clock, model, tool, orchestration, evaluator, accounted, unaccounted, and queue/wait measurements for a named time window. Selecting a run opens a span-level table with inclusive and exclusive duration, DSL node, parent, status, evidence state, and Phoenix deep links.
+
 The images above are captured from the running product with Playwright’s WebKit engine, the Safari-compatible automation target. Recreate them locally with `npm run capture:snapshots`.
 
 ### Interaction model
@@ -62,6 +68,7 @@ The interface is deliberately organized around rows and columns:
 - the output inbox is a scan-first table with one row per output;
 - selecting an output opens its detail record without losing the queue context;
 - the loop execution command center adds time-window filters and KPI-driven run focus;
+- the time-accounting window separates nested span time into model, tool, orchestration, evaluator, and explicit wait categories;
 - review, PR, trace, and evidence controls are plain text actions with explicit labels;
 - execution and conformance data use side-by-side columns and tabular evidence;
 - status is communicated with text and small state markers, not decorative button chrome.
@@ -80,6 +87,7 @@ The interface is deliberately organized around rows and columns:
 | Span tree and outline | What is the parent-child execution structure and the human-readable path through the loop? |
 | DSL conformance | Did observed execution match the declared workflow graph? |
 | Telemetry coverage | Which signals are observed, missing, derived, or degraded? |
+| Time accounting | Where did the loop spend time, and which timing claims are actually supported by spans? |
 | JSON evidence | Can a reviewer inspect exact structured output, provenance, schema, and missingness? |
 | Export and diagnostics | Can local state be backed up, restored, replayed, and diagnosed without hidden state? |
 
@@ -111,11 +119,15 @@ Selecting a run in the command center queries Phoenix for spans using the output
 - span kind, status, latency, and explicit DSL node IDs;
 - annotations and evaluations when the connected Phoenix version supports them.
 
-### 6. Compare declared and observed behavior
+### 6. Account for execution time
+
+Open `/time-accounting.html` to compare timing across a selected window. The view uses interval unions and exclusive child subtraction so nested and parallel spans do not inflate totals. A timing claim is marked `derived` only when the required span timestamps exist; incomplete timing stays `not_instrumented`, and Phoenix outages stay `unavailable`. Queue/wait time is never inferred from idle gaps.
+
+### 7. Compare declared and observed behavior
 
 The versioned loop DSL is the declared contract. The Phoenix trace is the observed record. The conformance view keeps both graphs visible, identifies missing or unexpected nodes and edges, and withholds critical-path claims when timing or graph completeness is insufficient.
 
-### 7. Make the decision durable
+### 8. Make the decision durable
 
 The reviewer records `Accept`, `Needs changes`, or `Decline`. Declines require a rationale. Events are append-only and projected into current state, so the decision survives a restart and remains exportable.
 
@@ -240,6 +252,7 @@ Implemented in the current MVP:
 - versioned decision vocabulary and pilot-loop DSL;
 - local GitHub PR linking, cached snapshots, auth/rate-limit/offline handling;
 - Phoenix/OpenInference trace capture, execution outline, span tree, and deep links;
+- span-derived time accounting with nested-span subtraction, parallel interval union, time-window KPIs, and run/span drill-down;
 - resilient Phoenix fallback with explicit degraded annotation coverage;
 - declared-versus-observed DSL conformance and critical-path safeguards;
 - validated JSON evidence views with provenance, schema status, and missingness;

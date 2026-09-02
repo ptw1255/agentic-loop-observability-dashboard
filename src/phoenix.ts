@@ -36,7 +36,7 @@ export async function emitDemoTrace(params: {
   sessionId: string;
   projectName?: string;
   url?: string;
-}): Promise<{ traceId: string; rootSpanId: string; reviewSpanId: string | null }> {
+}): Promise<{ traceId: string; rootSpanId: string; reviewSpanId: string | null; annotationError: string | null }> {
   const projectName = params.projectName ?? DEFAULT_PROJECT_NAME;
   const url = params.url ?? DEFAULT_PHOENIX_URL;
   const provider = register({ projectName, url, batch: false });
@@ -44,6 +44,7 @@ export async function emitDemoTrace(params: {
   let traceId = "";
   let rootSpanId = "";
   let reviewSpanId: string | null = null;
+  let annotationError: string | null = null;
 
   const fetchContextTool = traceTool(
     async (request: string) => {
@@ -212,22 +213,27 @@ export async function emitDemoTrace(params: {
   }
 
   if (reviewSpanId) {
-    const client = createClient({ options: { baseUrl: url } });
-    await addSpanAnnotation({
-      client,
-      sync: true,
-      spanAnnotation: {
-        spanId: reviewSpanId,
-        name: "review_verdict",
-        label: "needs_changes",
-        score: 0.42,
-        annotatorKind: "CODE",
-        explanation: "Simulated flaky tool failure kept the run reviewable but not acceptable."
-      }
-    });
+    try {
+      const client = createClient({ options: { baseUrl: url } });
+      await addSpanAnnotation({
+        client,
+        sync: true,
+        spanAnnotation: {
+          spanId: reviewSpanId,
+          name: "review_verdict",
+          label: "needs_changes",
+          score: 0.42,
+          annotatorKind: "CODE",
+          explanation: "Simulated flaky tool failure kept the run reviewable but not acceptable."
+        }
+      });
+    } catch (error) {
+      annotationError = error instanceof Error ? error.message : "Phoenix annotation write failed.";
+      console.warn("phoenix.annotation_write_degraded", annotationError);
+    }
   }
 
-  return { traceId, rootSpanId, reviewSpanId };
+  return { traceId, rootSpanId, reviewSpanId, annotationError };
 }
 
 export async function runAndLinkDemoTrace(db: Database.Database, store: EventStore, outputId: string): Promise<void> {
@@ -284,6 +290,23 @@ export async function runAndLinkDemoTrace(db: Database.Database, store: EventSto
       details: "Demo trace emitted explicit DSL node IDs for root, plan, code, test, review, and output spans."
     }
   });
+
+  if (trace.annotationError) {
+    store.append({
+      entityId: outputId,
+      entityType: "output",
+      eventType: "telemetry.coverage_assessed",
+      actor: { kind: "system", id: "phoenix-demo", display_name: "Phoenix Demo Runner" },
+      source: "phoenix.demo",
+      payload: {
+        output_id: outputId,
+        signal: "phoenix.span_annotations",
+        status: "degraded",
+        source: "phoenix.demo",
+        details: "Trace spans were captured, but Phoenix did not accept the optional review annotation write."
+      }
+    });
+  }
 }
 
 export async function getObservabilityForOutput(db: Database.Database, outputId: string): Promise<ObservabilitySummary> {
@@ -341,15 +364,19 @@ export async function getObservabilityForOutput(db: Database.Database, outputId:
     });
 
     const spans = spanResult.spans.map(normalizeSpan);
-    const annotations = spans.length > 0
+    const annotationResult = spans.length > 0
       ? await collectAnnotations(client, projectName, spans.map((span) => span.spanId))
-      : [];
+      : { annotations: [], degraded: false };
     const traceId = spans[0]?.traceId ?? runLink.traceId;
     const rootSpanId = spans.find((span) => span.parentId === null)?.spanId ?? runLink.rootSpanId;
 
     return {
       available: true,
-      message: spans.length === 0 ? "Phoenix is reachable but no spans matched this run yet." : "Phoenix trace loaded.",
+      message: spans.length === 0
+        ? "Phoenix is reachable but no spans matched this run yet."
+        : annotationResult.degraded
+          ? "Phoenix trace loaded; annotation query is degraded."
+          : "Phoenix trace loaded.",
       projectName,
       traceId,
       rootSpanId,
@@ -360,7 +387,7 @@ export async function getObservabilityForOutput(db: Database.Database, outputId:
       spans,
       outline: buildOutline(spans),
       tree: buildTree(spans),
-      annotations
+      annotations: annotationResult.annotations
     };
   } catch (error) {
     return {
@@ -408,25 +435,34 @@ async function collectAnnotations(
   client: ReturnType<typeof createClient>,
   projectName: string,
   spanIds: string[]
-): Promise<ObservedAnnotation[]> {
-  const result = await getSpanAnnotations({
-    client,
-    project: { projectName },
-    spanIds,
-    limit: 100
-  });
+): Promise<{ annotations: ObservedAnnotation[]; degraded: boolean }> {
+  try {
+    const result = await getSpanAnnotations({
+      client,
+      project: { projectName },
+      spanIds,
+      limit: 100
+    });
 
-  return result.annotations.map((annotation) => {
-    const resultRecord = asRecord(annotation.result);
     return {
-      spanId: readString(annotation, "span_id") ?? "",
-      name: readString(annotation, "name") ?? "annotation",
-      annotatorKind: readString(annotation, "annotator_kind"),
-      label: readString(resultRecord, "label"),
-      score: readNumber(resultRecord, "score"),
-      explanation: readString(resultRecord, "explanation")
+      annotations: result.annotations.map((annotation) => {
+        const resultRecord = asRecord(annotation.result);
+        return {
+          spanId: readString(annotation, "span_id") ?? "",
+          name: readString(annotation, "name") ?? "annotation",
+          annotatorKind: readString(annotation, "annotator_kind"),
+          label: readString(resultRecord, "label"),
+          score: readNumber(resultRecord, "score"),
+          explanation: readString(resultRecord, "explanation")
+        };
+      }),
+      degraded: false
     };
-  });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Phoenix annotation query failed.";
+    console.warn("phoenix.annotation_query_degraded", message);
+    return { annotations: [], degraded: true };
+  }
 }
 
 export function buildOutline(spans: ObservedSpan[]): string[] {

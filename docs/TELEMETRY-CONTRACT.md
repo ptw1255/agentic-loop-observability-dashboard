@@ -149,3 +149,14 @@ One pilot loop passes when:
 - Use Phoenix annotations/evaluations as quality evidence; preserve whether the annotator is human, code, or an LLM.
 - Treat the dashboard’s custom DAG and DSL-conformance views as derived views. Phoenix remains the drill-down destination for raw trace inspection.
 
+## Primary references
+
+Validated September 2, 2026:
+
+- [OpenInference specification](https://arize-ai.github.io/openinference/spec/)
+- [OpenInference semantic conventions](https://arize-ai.github.io/openinference/spec/semantic_conventions.html)
+- [Phoenix tracing and evaluation overview](https://arize.com/docs/phoenix)
+- [Phoenix local Docker deployment](https://arize.com/docs/phoenix/self-hosting/deployment-options/docker)
+- [Phoenix custom span attributes and metadata](https://arize.com/docs/phoenix/tracing/how-to-tracing/add-metadata/customize-spans)
+- [Phoenix span export and query guidance](https://arize.com/docs/phoenix/tracing/how-to-tracing/importing-and-exporting-traces/extract-data-from-spans)
+- [Phoenix annotations API guidance](https://arize.com/docs/phoenix/tracing/how-to-tracing/feedback-and-annotations/capture-feedback)

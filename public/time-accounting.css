@@ -194,6 +194,28 @@
   margin-top: 0;
 }
 
+.accounting-detail-summary {
+  min-width: 1040px;
+}
+
+.accounting-detail-summary th {
+  white-space: nowrap;
+}
+
+.accounting-detail-summary th:nth-child(1),
+.accounting-detail-summary th:nth-child(2),
+.accounting-detail-summary th:nth-child(3),
+.accounting-detail-summary th:nth-child(4),
+.accounting-detail-summary th:nth-child(5),
+.accounting-detail-summary th:nth-child(6),
+.accounting-detail-summary th:nth-child(7) {
+  width: 120px;
+}
+
+.accounting-detail-summary th:nth-child(8) {
+  width: 200px;
+}
+
 .accounting-span-table th:nth-child(1) { width: 44px; }
 .accounting-span-table th:nth-child(2) { width: 110px; }
 .accounting-span-table th:nth-child(3) { width: 215px; }

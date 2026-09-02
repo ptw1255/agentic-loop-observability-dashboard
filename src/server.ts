@@ -8,6 +8,7 @@ import { buildDslConformance, parseLoopDefinition } from "./dsl.js";
 import { GithubPullRequestAdapter } from "./github.js";
 import { StructuredLogger } from "./logger.js";
 import { getObservabilityForOutput, isPhoenixAvailable, runAndLinkDemoTrace } from "./phoenix.js";
+import { readLoopExecutionData } from "./loop-execution.js";
 import { readDashboardData } from "./projections.js";
 import { seedDemoData } from "./seed.js";
 import { EventStore } from "./store.js";
@@ -77,6 +78,22 @@ app.get("/api/conformance", async (request, response) => {
   const definition = parseLoopDefinition(rootDir);
   const observability = await getObservabilityForOutput(db, outputId);
   response.json(buildDslConformance(definition, observability));
+});
+
+app.get("/api/loop-execution", async (request, response) => {
+  const window = typeof request.query.window === "string" ? request.query.window : null;
+  const outputId = typeof request.query.outputId === "string" ? request.query.outputId : null;
+
+  try {
+    response.json(await readLoopExecutionData(db, rootDir, window, outputId));
+  } catch (error) {
+    logger.error(
+      "api.loop_execution.failed",
+      { window, outputId, error: error instanceof Error ? error.message : "unknown error" },
+      String(response.getHeader("x-request-id") ?? "")
+    );
+    response.status(500).json({ error: error instanceof Error ? error.message : "Loop execution query failed." });
+  }
 });
 
 app.post("/api/observability/demo-run", async (request, response) => {

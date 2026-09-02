@@ -31,6 +31,18 @@ await observabilityPanel.screenshot({
   path: path.join(outputDir, "loop-detail-webkit.png")
 });
 
+const commandCenter = await context.newPage();
+await commandCenter.goto(`${baseUrl}/loop-execution.html?window=24h`, { waitUntil: "networkidle" });
+await commandCenter.locator('[data-role="execution-content"] .execution-kpis').waitFor();
+await commandCenter.screenshot({
+  path: path.join(outputDir, "loop-command-center-webkit.png"),
+  fullPage: false
+});
+await commandCenter.getByRole("link", { name: "Last hour" }).click();
+await commandCenter.locator('[data-role="execution-content"] .execution-kpis').waitFor();
+await commandCenter.getByRole("button", { name: /Needs attention/ }).click();
+await commandCenter.getByRole("heading", { name: "Runs" }).waitFor();
+
 await browser.close();
 
 console.log(`Captured WebKit product snapshots in ${outputDir}`);

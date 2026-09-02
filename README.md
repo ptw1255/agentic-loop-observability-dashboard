@@ -45,6 +45,12 @@ The inbox makes review priority legible immediately: state counts, denominator-b
 
 The loop view turns a trace into a review artifact: trace identity, latency, execution order, parent-child structure, tool failures, and evaluations are visible without leaving the output record.
 
+### Snapshot: loop execution command center
+
+![WebKit-rendered loop execution command center](docs/snapshots/loop-command-center-webkit.png)
+
+The dedicated command center is the fast path for operators. It starts with time-windowed KPIs, a compact health strip, and a run table. Selecting **Needs attention**, **Runs with errors**, **Trace coverage**, or **Median duration** narrows the table so an odd KPI becomes an actionable investigation queue. Selecting a run opens its trace, span, annotation, and DSL conformance detail alongside the table.
+
 The images above are captured from the running product with Playwright’s WebKit engine, the Safari-compatible automation target. Recreate them locally with `npm run capture:snapshots`.
 
 ### Interaction model
@@ -55,6 +61,7 @@ The interface is deliberately organized around rows and columns:
 - KPI columns summarize the current pilot without hiding denominators;
 - the output inbox is a scan-first table with one row per output;
 - selecting an output opens its detail record without losing the queue context;
+- the loop execution command center adds time-window filters and KPI-driven run focus;
 - review, PR, trace, and evidence controls are plain text actions with explicit labels;
 - execution and conformance data use side-by-side columns and tabular evidence;
 - status is communicated with text and small state markers, not decorative button chrome.
@@ -80,7 +87,7 @@ The interface is deliberately organized around rows and columns:
 
 ### 1. Triage the inbox
 
-The left rail groups outputs by their current human-review state. Each card keeps the key context visible: output type, creator, run linkage, PR linkage, open actions, and stale-state messaging.
+The output table groups records by their current human-review state. Each row keeps the key context visible: output type, creator, run linkage, PR linkage, open actions, and stale-state messaging.
 
 ### 2. Establish product context
 
@@ -90,9 +97,13 @@ The detail view starts with the output objective and current version. The review
 
 GitHub pull-request state is displayed as implementation context. `Accepted` and `Declined` remain human decisions in the append-only event ledger; neither is inferred from merge state, checks, or model evaluation.
 
-### 4. Follow the agent loop
+### 4. Scan the execution command center
 
-When a run is linked, the app queries Phoenix for spans using the output and run correlation fields. It renders:
+Open `/loop-execution.html` to see all linked runs in a dedicated operational view. Start with the selected time window, scan the KPI row, and use a KPI as a focus filter when something looks unusual. The run health strip provides a compact chronological signal; the table provides the accountable row to investigate.
+
+### 5. Follow the agent loop
+
+Selecting a run in the command center queries Phoenix for spans using the output and run correlation fields. It renders:
 
 - a chronological execution outline;
 - a parent-child span tree;
@@ -100,11 +111,11 @@ When a run is linked, the app queries Phoenix for spans using the output and run
 - span kind, status, latency, and explicit DSL node IDs;
 - annotations and evaluations when the connected Phoenix version supports them.
 
-### 5. Compare declared and observed behavior
+### 6. Compare declared and observed behavior
 
 The versioned loop DSL is the declared contract. The Phoenix trace is the observed record. The conformance view keeps both graphs visible, identifies missing or unexpected nodes and edges, and withholds critical-path claims when timing or graph completeness is insufficient.
 
-### 6. Make the decision durable
+### 7. Make the decision durable
 
 The reviewer records `Accept`, `Needs changes`, or `Decline`. Declines require a rationale. Events are append-only and projected into current state, so the decision survives a restart and remains exportable.
 
@@ -157,6 +168,19 @@ Local TypeScript service ───────────────> Adapter/
 
 The local service owns the review model and durability boundary. Phoenix owns execution telemetry. The GitHub adapter owns PR synchronization and cached snapshots. Each external dependency can degrade independently while the local review record remains usable.
 
+## Loop execution command center
+
+The command center is a separate HTML/TypeScript page at `/loop-execution.html`. It is designed for a different question than the output review page:
+
+| Review page | Command center |
+| --- | --- |
+| What is this output, and should it ship? | Which runs look unusual right now? |
+| Inspect one output’s PR, artifacts, actions, and decision ledger | Compare runs across a time window |
+| Record a human decision | Focus odd KPIs into a run queue |
+| Drill into the output record | Drill into trace spans, errors, latency, and DSL conformance |
+
+Supported windows are `Last hour`, `Last 24 hours`, `Last 7 days`, and `All available`. KPI filters are local and reversible: `Needs attention`, `Runs with errors`, `Trace coverage`, and `Median duration`. The command center stays useful when Phoenix is degraded by showing the run and marking trace evidence as degraded instead of dropping the row.
+
 ## Run the product locally
 
 Requirements: Node.js 20+, npm, and optionally Docker for the pinned Phoenix deployment.
@@ -190,6 +214,7 @@ npm test                 # Unit and projection tests
 npm run typecheck        # TypeScript validation
 npm run build            # Browser bundle and server build
 npm run pilot:run        # Seed and exercise the local pilot loop
+npm run capture:snapshots # Capture WebKit/Safari-compatible product views
 ```
 
 ## Contracts and implementation status

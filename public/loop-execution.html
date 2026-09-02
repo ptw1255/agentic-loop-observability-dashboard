@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Loop Execution · Agentic Loop Observatory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/loop-execution.css" />
+  </head>
+  <body>
+    <div class="shell execution-shell" data-role="loop-execution-app">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <strong>ALO</strong>
+          <span>Agentic Loop Observatory</span>
+        </div>
+        <nav class="primary-nav" aria-label="Dashboard views">
+          <a href="/#output-review" class="primary-nav__link">Output review</a>
+          <a href="/loop-execution.html" class="primary-nav__link primary-nav__link--active">Loop execution</a>
+          <a href="/#json-evidence" class="primary-nav__link">Evidence</a>
+        </nav>
+        <a href="/" class="topbar__link">Open current view</a>
+      </header>
+
+      <section class="viewbar">
+        <div>
+          <h1>Loop execution</h1>
+          <span data-role="execution-status">Loading run history...</span>
+        </div>
+        <nav class="viewbar__links" aria-label="Execution time window">
+          <a href="?window=1h" data-window="1h" class="viewbar__link">Last hour</a>
+          <a href="?window=24h" data-window="24h" class="viewbar__link">Last 24 hours</a>
+          <a href="?window=7d" data-window="7d" class="viewbar__link">Last 7 days</a>
+          <a href="?window=all" data-window="all" class="viewbar__link">All available</a>
+        </nav>
+      </section>
+
+      <main data-role="execution-content" aria-live="polite"></main>
+    </div>
+    <script type="module" src="/assets/loop-execution.js"></script>
+  </body>
+</html>

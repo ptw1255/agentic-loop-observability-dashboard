@@ -1,0 +1,182 @@
+{
+  "schema_version": "0.1.0",
+  "captured_at": "2026-09-02T18:06:32Z",
+  "loop_definition": {
+    "id": "delivery-loop",
+    "version": "0.4.0",
+    "title": "Plan, implement, test, review, and publish",
+    "nodes": [
+      {
+        "id": "plan",
+        "kind": "agent",
+        "title": "Plan change",
+        "required_telemetry": ["duration", "status", "output_ref"]
+      },
+      {
+        "id": "code",
+        "kind": "agent",
+        "title": "Implement change",
+        "required_telemetry": ["duration", "status", "output_ref"]
+      },
+      {
+        "id": "test",
+        "kind": "tool",
+        "title": "Run tests",
+        "required_telemetry": ["duration", "status", "output_ref"]
+      },
+      {
+        "id": "review",
+        "kind": "evaluator",
+        "title": "Review evidence",
+        "required_telemetry": ["duration", "status", "output_ref"]
+      },
+      {
+        "id": "output",
+        "kind": "output",
+        "title": "Publish reviewable output",
+        "required_telemetry": ["status", "output_ref"]
+      }
+    ],
+    "edges": [
+      { "from": "plan", "to": "code", "meaning": "sequence" },
+      { "from": "code", "to": "test", "meaning": "dependency" },
+      { "from": "test", "to": "review", "meaning": "dependency" },
+      { "from": "review", "to": "output", "meaning": "gate" }
+    ]
+  },
+  "run": {
+    "id": "run-9e41",
+    "state": "succeeded",
+    "started_at": "2026-09-02T17:53:56Z",
+    "ended_at": "2026-09-02T17:54:08.1Z",
+    "trace": {
+      "provider": "arize_phoenix",
+      "project": "delivery-loop-local",
+      "trace_id": "9e410000000000000000000000000001",
+      "root_span_id": "9e41000000000001",
+      "session_id": null,
+      "evidence_status": "observed",
+      "retrieved_at": "2026-09-02T18:05:00Z"
+    },
+    "node_observations": [
+      {
+        "node_id": "plan",
+        "evidence_status": "observed",
+        "span_ids": ["9e41000000000002"],
+        "duration_ms": 42,
+        "status": "ok",
+        "attempts": 1
+      },
+      {
+        "node_id": "code",
+        "evidence_status": "observed",
+        "span_ids": ["9e41000000000003", "9e41000000000004"],
+        "duration_ms": 8400,
+        "status": "ok",
+        "attempts": 1
+      },
+      {
+        "node_id": "test",
+        "evidence_status": "not_instrumented",
+        "span_ids": [],
+        "duration_ms": null,
+        "status": "unknown",
+        "attempts": null
+      },
+      {
+        "node_id": "review",
+        "evidence_status": "observed",
+        "span_ids": ["9e41000000000005"],
+        "duration_ms": 1300,
+        "status": "ok",
+        "attempts": 1
+      },
+      {
+        "node_id": "output",
+        "evidence_status": "observed",
+        "span_ids": ["9e41000000000006"],
+        "duration_ms": 20,
+        "status": "ok",
+        "attempts": 1
+      }
+    ],
+    "telemetry_coverage": [
+      {
+        "signal": "node_duration",
+        "status": "observed",
+        "source": "Phoenix span timestamps",
+        "consequence": "Duration is available for four of five declared nodes.",
+        "repair": null
+      },
+      {
+        "signal": "test_node_mapping",
+        "status": "not_instrumented",
+        "source": "alo.dsl.node_id",
+        "consequence": "Test conformance and duration cannot be established.",
+        "repair": "Add the DSL node ID to the test boundary span."
+      },
+      {
+        "signal": "tool_arguments",
+        "status": "redacted",
+        "source": "OpenInference tool attributes",
+        "consequence": "Execution timing and status are visible; payload content is hidden.",
+        "repair": null
+      }
+    ]
+  },
+  "outputs": [
+    {
+      "id": "output-retry-policy",
+      "version": 3,
+      "type": "pull_request",
+      "title": "Add bounded retry policy",
+      "summary": "Adds bounded backoff and retry observability to the delivery loop.",
+      "review_state": "awaiting_review",
+      "artifacts": [
+        {
+          "id": "artifact-diff-summary",
+          "uri": "artifacts/output-retry-policy/v3/diff-summary.json",
+          "media_type": "application/json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "schema_ref": "schemas/diff-summary.v1.json",
+          "created_at": "2026-09-02T17:54:08Z",
+          "redaction_status": "redacted"
+        }
+      ],
+      "pull_requests": [
+        {
+          "repository": "example/example-repo",
+          "number": 184,
+          "url": "https://github.com/example/example-repo/pull/184",
+          "state": "open",
+          "review_status": "requested",
+          "synced_at": "2026-09-02T18:05:32Z"
+        }
+      ],
+      "actions": [
+        {
+          "id": "action-timeout-evidence",
+          "title": "Add timeout evidence",
+          "state": "open",
+          "owner": null,
+          "origin_node_id": "review",
+          "origin_span_id": "9e41000000000005",
+          "created_at": "2026-09-02T17:54:08Z",
+          "completed_at": null
+        },
+        {
+          "id": "action-validate-backoff",
+          "title": "Validate bounded backoff",
+          "state": "done",
+          "owner": "agent:test",
+          "origin_node_id": "test",
+          "origin_span_id": null,
+          "created_at": "2026-09-02T17:54:08Z",
+          "completed_at": "2026-09-02T18:01:00Z"
+        }
+      ],
+      "decisions": []
+    }
+  ]
+}
+

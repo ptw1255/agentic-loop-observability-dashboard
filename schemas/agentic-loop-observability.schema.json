@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ptw1255/agentic-loop-observability-dashboard/schemas/agentic-loop-observability.schema.json",
+  "title": "Agentic Loop Observability Capture",
+  "description": "Stateful product, decision, workflow, and trace linkage for one agent loop run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "loop_definition",
+    "run",
+    "outputs",
+    "captured_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "loop_definition": {
+      "$ref": "#/$defs/loopDefinition"
+    },
+    "run": {
+      "$ref": "#/$defs/run"
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/output"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/-]*$"
+    },
+    "evidenceStatus": {
+      "enum": [
+        "observed",
+        "derived",
+        "declared",
+        "redacted",
+        "not_instrumented",
+        "unavailable",
+        "not_applicable"
+      ]
+    },
+    "edgeMeaning": {
+      "enum": [
+        "sequence",
+        "dependency",
+        "gate",
+        "data_flow",
+        "causal_claim"
+      ]
+    },
+    "loopDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "title", "nodes", "edges"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/edge"
+          }
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "enum": [
+            "agent",
+            "chain",
+            "llm",
+            "tool",
+            "retriever",
+            "reranker",
+            "embedding",
+            "guardrail",
+            "evaluator",
+            "prompt",
+            "human_gate",
+            "output"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_telemetry": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "meaning"],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/identifier"
+        },
+        "to": {
+          "$ref": "#/$defs/identifier"
+        },
+        "meaning": {
+          "$ref": "#/$defs/edgeMeaning"
+        },
+        "evidence_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "started_at", "trace", "node_observations", "telemetry_coverage"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "state": {
+          "enum": ["queued", "running", "succeeded", "failed", "cancelled"]
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "trace": {
+          "$ref": "#/$defs/traceLink"
+        },
+        "node_observations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nodeObservation"
+          }
+        },
+        "telemetry_coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coverage"
+          }
+        }
+      }
+    },
+    "traceLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "project", "trace_id", "evidence_status"],
+      "properties": {
+        "provider": {
+          "const": "arize_phoenix"
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trace_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "root_span_id": {
+          "type": ["string", "null"]
+        },
+        "session_id": {
+          "type": ["string", "null"]
+        },
+        "evidence_status": {
+          "$ref": "#/$defs/evidenceStatus"
+        },
+        "retrieved_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "nodeObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "evidence_status", "span_ids"],
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "evidence_status": {
+          "$ref": "#/$defs/evidenceStatus"
+        },
+        "span_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duration_ms": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "status": {
+          "enum": ["ok", "error", "unset", "unknown"]
+        },
+        "attempts": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal", "status", "source"],
+      "properties": {
+        "signal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/evidenceStatus"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consequence": {
+          "type": "string"
+        },
+        "repair": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "type", "title", "review_state", "artifacts", "actions", "decisions"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "enum": ["pull_request", "code", "document", "report", "dataset", "json", "decision", "other"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string"
+        },
+        "review_state": {
+          "enum": ["draft", "awaiting_review", "needs_changes", "accepted", "declined", "superseded"]
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "pull_requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pullRequest"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/decision"
+          }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "uri", "media_type", "sha256", "created_at"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "schema_ref": {
+          "type": ["string", "null"]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "redaction_status": {
+          "enum": ["not_required", "redacted", "unknown"]
+        }
+      }
+    },
+    "pullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "number", "url", "state", "synced_at"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "state": {
+          "enum": ["open", "closed", "merged", "unknown"]
+        },
+        "review_status": {
+          "enum": ["not_requested", "requested", "changes_requested", "approved", "unknown"]
+        },
+        "synced_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "state", "created_at"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "enum": ["open", "in_progress", "blocked", "done", "dismissed"]
+        },
+        "owner": {
+          "type": ["string", "null"]
+        },
+        "origin_node_id": {
+          "type": ["string", "null"]
+        },
+        "origin_span_id": {
+          "type": ["string", "null"]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "state", "actor", "decided_at", "output_version"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "state": {
+          "enum": ["needs_changes", "accepted", "declined", "superseded", "reopened"]
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rationale": {
+          "type": ["string", "null"]
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "output_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}
+

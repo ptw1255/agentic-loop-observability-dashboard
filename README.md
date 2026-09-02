@@ -146,6 +146,7 @@ The current MVP slice includes:
 - SQLite-backed append-only events and deterministic current-state projections;
 - seeded demo data for one pilot loop and one output review flow;
 - append-only accept, decline, and needs-changes decisions;
+- local GitHub pull-request linking, sync, cached snapshots, and failure-state capture through the `gh` CLI;
 - export and restore of local state;
 - JSON evidence views with compact, table, tree, and raw modes.
 
@@ -160,7 +161,6 @@ Implemented now:
 
 Still pending:
 
-- live GitHub PR sync and adapter hardening
 - Phoenix and OpenInference trace integration
 - declared-versus-observed DSL conformance and DAG rendering
 - pilot hardening and diagnostics bundle

@@ -14,8 +14,8 @@ export function seedDemoData(store: EventStore): void {
   const outputId = "output-demo-kiro-observability";
   const actionId = "action-wire-prd";
   const runId = "run-2026-09-02-001";
-  const repository = "ptw1255/Kiro-Observability";
-  const pullRequestNumber = 12;
+  const repository = "ptw1255/factorio";
+  const pullRequestNumber = 1;
 
   const prdPayload = {
     objective: "Create a DSL-backed observability surface for agent loops.",
@@ -204,10 +204,30 @@ export function seedDemoData(store: EventStore): void {
       pullRequestNumber: pullRequestNumber,
       state: "open",
       reviewSummary: "1 reviewer requested changes",
-      checksSummary: "3 passed, 1 pending",
-      commitCount: 4,
-      fileCount: 7,
+      checksSummary: "No checks reported",
+      commitCount: 11,
+      fileCount: 27,
       capturedAt: "2026-09-02T14:19:00.000Z"
+    }
+  });
+
+  store.append({
+    entityId: outputId,
+    entityType: "output",
+    eventType: "pull_request.sync_status_recorded",
+    actor: { kind: "system", id: "github-cli-sync", display_name: "GitHub CLI Sync" },
+    source: "seed.demo",
+    occurredAt: "2026-09-02T14:19:30.000Z",
+    payload: {
+      output_id: outputId,
+      repository,
+      pull_request_number: pullRequestNumber,
+      sync_state: "sync_ok",
+      sync_message: "Seeded cached snapshot available before the first live sync.",
+      canonical_repository: repository,
+      last_attempted_at: "2026-09-02T14:19:30.000Z",
+      last_successful_at: "2026-09-02T14:19:30.000Z",
+      rate_limit_reset_at: null
     }
   });
 }

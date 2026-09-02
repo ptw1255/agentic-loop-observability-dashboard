@@ -9,6 +9,7 @@ import type {
   OutputDetail,
   OutputListItem,
   PullRequestSnapshot,
+  PullRequestSyncStatus,
   TelemetryCoverageRecord
 } from "./types.js";
 
@@ -19,6 +20,7 @@ interface OutputState {
   decisions: DecisionRecord[];
   telemetryCoverage: TelemetryCoverageRecord[];
   pullRequestSnapshots: PullRequestSnapshot[];
+  pullRequestSyncStatus: PullRequestSyncStatus | null;
 }
 
 function assertDecisionState(value: string): DecisionState {
@@ -67,13 +69,19 @@ export function buildProjection(events: DomainEvent[]): Map<string, OutputState>
           lastDecisionActor: null,
           staleReason: null,
           pullRequestRepo: null,
-          pullRequestNumber: null
+          pullRequestNumber: null,
+          pullRequestSyncState: null,
+          pullRequestSyncMessage: null,
+          pullRequestLastSyncedAt: null,
+          pullRequestCanonicalRepo: null,
+          pullRequestRateLimitResetAt: null
         },
         artifacts: [],
         actions: [],
         decisions: [],
         telemetryCoverage: [],
-        pullRequestSnapshots: []
+        pullRequestSnapshots: [],
+        pullRequestSyncStatus: null
       });
       continue;
     }
@@ -168,11 +176,50 @@ export function buildProjection(events: DomainEvent[]): Map<string, OutputState>
         const payload = event.payload as { repository: string; pull_request_number: number };
         output.summary.pullRequestRepo = payload.repository;
         output.summary.pullRequestNumber = payload.pull_request_number;
+        output.summary.pullRequestSyncState = null;
+        output.summary.pullRequestSyncMessage = null;
+        output.summary.pullRequestLastSyncedAt = null;
+        output.summary.pullRequestCanonicalRepo = null;
+        output.summary.pullRequestRateLimitResetAt = null;
+        output.summary.staleReason = "Linked PR has not been synced yet.";
+        output.pullRequestSyncStatus = null;
         break;
       }
       case "pull_request.snapshot_recorded": {
         const payload = event.payload as unknown as PullRequestSnapshot;
         output.pullRequestSnapshots = sortByOccurred([...output.pullRequestSnapshots, payload]);
+        break;
+      }
+      case "pull_request.sync_status_recorded": {
+        const payload = event.payload as {
+          repository: string;
+          pull_request_number: number;
+          sync_state: OutputListItem["pullRequestSyncState"];
+          sync_message: string;
+          canonical_repository: string | null;
+          last_attempted_at: string;
+          last_successful_at: string | null;
+          rate_limit_reset_at: string | null;
+        };
+        output.pullRequestSyncStatus = {
+          repository: payload.repository,
+          pullRequestNumber: payload.pull_request_number,
+          syncState: payload.sync_state ?? "sync_error",
+          syncMessage: payload.sync_message,
+          canonicalRepository: payload.canonical_repository,
+          lastAttemptedAt: payload.last_attempted_at,
+          lastSuccessfulAt: payload.last_successful_at,
+          rateLimitResetAt: payload.rate_limit_reset_at
+        };
+        output.summary.pullRequestSyncState = output.pullRequestSyncStatus.syncState;
+        output.summary.pullRequestSyncMessage = output.pullRequestSyncStatus.syncMessage;
+        output.summary.pullRequestLastSyncedAt = output.pullRequestSyncStatus.lastSuccessfulAt;
+        output.summary.pullRequestCanonicalRepo = output.pullRequestSyncStatus.canonicalRepository;
+        output.summary.pullRequestRateLimitResetAt = output.pullRequestSyncStatus.rateLimitResetAt;
+        output.summary.staleReason =
+          output.pullRequestSyncStatus.syncState === "sync_ok" || output.pullRequestSyncStatus.syncState === "repo_renamed"
+            ? null
+            : output.pullRequestSyncStatus.syncMessage;
         break;
       }
       default:
@@ -200,17 +247,22 @@ export function writeProjection(db: Database.Database, projection: Map<string, O
     DELETE FROM decision_projection;
     DELETE FROM telemetry_projection;
     DELETE FROM pull_request_projection;
+    DELETE FROM pull_request_sync_projection;
   `);
 
   const insertOutput = db.prepare(`
     INSERT INTO output_projection (
       output_id, title, output_type, summary, status, creator, run_id, created_at, updated_at,
       current_version, artifact_count, open_action_count, last_decision_at, last_decision_actor,
-      stale_reason, pull_request_repo, pull_request_number
+      stale_reason, pull_request_repo, pull_request_number, pull_request_sync_state,
+      pull_request_sync_message, pull_request_last_synced_at, pull_request_canonical_repo,
+      pull_request_rate_limit_reset_at
     ) VALUES (
       @outputId, @title, @outputType, @summary, @status, @creator, @runId, @createdAt, @updatedAt,
       @currentVersion, @artifactCount, @openActionCount, @lastDecisionAt, @lastDecisionActor,
-      @staleReason, @pullRequestRepo, @pullRequestNumber
+      @staleReason, @pullRequestRepo, @pullRequestNumber, @pullRequestSyncState,
+      @pullRequestSyncMessage, @pullRequestLastSyncedAt, @pullRequestCanonicalRepo,
+      @pullRequestRateLimitResetAt
     );
   `);
   const insertArtifact = db.prepare(`
@@ -247,6 +299,15 @@ export function writeProjection(db: Database.Database, projection: Map<string, O
     ) VALUES (
       @snapshotId, @outputId, @repository, @pullRequestNumber, @state, @reviewSummary, @checksSummary,
       @commitCount, @fileCount, @capturedAt
+    );
+  `);
+  const insertPrSync = db.prepare(`
+    INSERT INTO pull_request_sync_projection (
+      output_id, repository, pull_request_number, sync_state, sync_message,
+      canonical_repository, last_attempted_at, last_successful_at, rate_limit_reset_at
+    ) VALUES (
+      @outputId, @repository, @pullRequestNumber, @syncState, @syncMessage,
+      @canonicalRepository, @lastAttemptedAt, @lastSuccessfulAt, @rateLimitResetAt
     );
   `);
 
@@ -287,6 +348,10 @@ export function writeProjection(db: Database.Database, projection: Map<string, O
       for (const snapshot of state.pullRequestSnapshots) {
         insertPr.run({ outputId, ...snapshot });
       }
+
+      if (state.pullRequestSyncStatus) {
+        insertPrSync.run({ outputId, ...state.pullRequestSyncStatus });
+      }
     }
   });
 
@@ -313,7 +378,12 @@ export function readDashboardData(db: Database.Database, selectedOutputId?: stri
         last_decision_actor AS lastDecisionActor,
         stale_reason AS staleReason,
         pull_request_repo AS pullRequestRepo,
-        pull_request_number AS pullRequestNumber
+        pull_request_number AS pullRequestNumber,
+        pull_request_sync_state AS pullRequestSyncState,
+        pull_request_sync_message AS pullRequestSyncMessage,
+        pull_request_last_synced_at AS pullRequestLastSyncedAt,
+        pull_request_canonical_repo AS pullRequestCanonicalRepo,
+        pull_request_rate_limit_reset_at AS pullRequestRateLimitResetAt
       FROM output_projection
       ORDER BY updated_at DESC, output_id ASC
     `)
@@ -354,7 +424,12 @@ export function readOutputDetail(db: Database.Database, outputId: string): Outpu
         last_decision_actor AS lastDecisionActor,
         stale_reason AS staleReason,
         pull_request_repo AS pullRequestRepo,
-        pull_request_number AS pullRequestNumber
+        pull_request_number AS pullRequestNumber,
+        pull_request_sync_state AS pullRequestSyncState,
+        pull_request_sync_message AS pullRequestSyncMessage,
+        pull_request_last_synced_at AS pullRequestLastSyncedAt,
+        pull_request_canonical_repo AS pullRequestCanonicalRepo,
+        pull_request_rate_limit_reset_at AS pullRequestRateLimitResetAt
       FROM output_projection
       WHERE output_id = ?
     `)
@@ -480,6 +555,26 @@ export function readOutputDetail(db: Database.Database, outputId: string): Outpu
       ORDER BY captured_at DESC, snapshot_id DESC
     `)
     .all(outputId) as PullRequestSnapshot[];
+  const filteredPullRequestSnapshots = pullRequestSnapshots.filter((snapshot) =>
+      snapshot.repository === summary.pullRequestRepo &&
+      snapshot.pullRequestNumber === summary.pullRequestNumber
+    );
+
+  const pullRequestSyncStatus = db
+    .prepare(`
+      SELECT
+        repository,
+        pull_request_number AS pullRequestNumber,
+        sync_state AS syncState,
+        sync_message AS syncMessage,
+        canonical_repository AS canonicalRepository,
+        last_attempted_at AS lastAttemptedAt,
+        last_successful_at AS lastSuccessfulAt,
+        rate_limit_reset_at AS rateLimitResetAt
+      FROM pull_request_sync_projection
+      WHERE output_id = ?
+    `)
+    .get(outputId) as PullRequestSyncStatus | undefined;
 
   return {
     summary,
@@ -487,6 +582,7 @@ export function readOutputDetail(db: Database.Database, outputId: string): Outpu
     actions,
     decisions: parsedDecisions,
     telemetryCoverage,
-    pullRequestSnapshots
+    pullRequestSnapshots: filteredPullRequestSnapshots,
+    pullRequestSyncStatus: pullRequestSyncStatus ?? null
   };
 }

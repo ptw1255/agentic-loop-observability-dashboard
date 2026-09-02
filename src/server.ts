@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureDataDirectory, openDatabase } from "./db.js";
+import { GithubPullRequestAdapter } from "./github.js";
 import { readDashboardData } from "./projections.js";
 import { seedDemoData } from "./seed.js";
 import { EventStore } from "./store.js";
@@ -17,6 +18,7 @@ const dbPath = path.join(dataDir, "dashboard.sqlite");
 const app = express();
 const db = openDatabase(dbPath);
 const store = new EventStore(db);
+const githubAdapter = new GithubPullRequestAdapter(db, store);
 
 seedDemoData(store);
 store.refreshProjection();
@@ -27,6 +29,42 @@ app.use(express.static(path.join(rootDir, "public")));
 app.get("/api/dashboard", (request, response) => {
   const selectedOutputId = typeof request.query.outputId === "string" ? request.query.outputId : null;
   response.json(readDashboardData(db, selectedOutputId));
+});
+
+app.post("/api/pull-requests/link", async (request, response) => {
+  const { outputId, repository, pullRequestNumber } = request.body as {
+    outputId?: string;
+    repository?: string;
+    pullRequestNumber?: number;
+  };
+  const parsedPullRequestNumber = Number(pullRequestNumber);
+
+  if (!outputId || !repository || !Number.isInteger(parsedPullRequestNumber) || parsedPullRequestNumber < 1) {
+    response.status(400).json({ error: "outputId, repository, and a positive pullRequestNumber are required." });
+    return;
+  }
+
+  try {
+    await githubAdapter.linkPullRequest(outputId, repository, parsedPullRequestNumber);
+    response.status(201).json(readDashboardData(db, outputId));
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : "Pull request link failed." });
+  }
+});
+
+app.post("/api/pull-requests/sync", async (request, response) => {
+  const { outputId } = request.body as { outputId?: string };
+  if (!outputId) {
+    response.status(400).json({ error: "outputId is required." });
+    return;
+  }
+
+  try {
+    await githubAdapter.syncOutputPullRequest(outputId);
+    response.status(200).json(readDashboardData(db, outputId));
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : "Pull request sync failed." });
+  }
 });
 
 app.post("/api/decisions", (request, response) => {

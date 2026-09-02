@@ -45,6 +45,7 @@
         "action.state_changed",
         "pull_request.linked",
         "pull_request.snapshot_recorded",
+        "pull_request.sync_status_recorded",
         "run.linked",
         "decision.recorded",
         "output.superseded",

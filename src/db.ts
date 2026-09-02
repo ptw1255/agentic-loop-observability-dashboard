@@ -21,7 +21,16 @@ const MIGRATIONS = [
     );
   `,
   `
-    CREATE TABLE IF NOT EXISTS output_projection (
+    DROP TABLE IF EXISTS output_projection;
+    DROP TABLE IF EXISTS artifact_projection;
+    DROP TABLE IF EXISTS action_projection;
+    DROP TABLE IF EXISTS decision_projection;
+    DROP TABLE IF EXISTS telemetry_projection;
+    DROP TABLE IF EXISTS pull_request_projection;
+    DROP TABLE IF EXISTS pull_request_sync_projection;
+  `,
+  `
+    CREATE TABLE output_projection (
       output_id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       output_type TEXT NOT NULL,
@@ -38,11 +47,16 @@ const MIGRATIONS = [
       last_decision_actor TEXT,
       stale_reason TEXT,
       pull_request_repo TEXT,
-      pull_request_number INTEGER
+      pull_request_number INTEGER,
+      pull_request_sync_state TEXT,
+      pull_request_sync_message TEXT,
+      pull_request_last_synced_at TEXT,
+      pull_request_canonical_repo TEXT,
+      pull_request_rate_limit_reset_at TEXT
     );
   `,
   `
-    CREATE TABLE IF NOT EXISTS artifact_projection (
+    CREATE TABLE artifact_projection (
       output_id TEXT NOT NULL,
       artifact_id TEXT NOT NULL,
       label TEXT NOT NULL,
@@ -60,7 +74,7 @@ const MIGRATIONS = [
     );
   `,
   `
-    CREATE TABLE IF NOT EXISTS action_projection (
+    CREATE TABLE action_projection (
       action_id TEXT PRIMARY KEY,
       output_id TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -73,7 +87,7 @@ const MIGRATIONS = [
     );
   `,
   `
-    CREATE TABLE IF NOT EXISTS decision_projection (
+    CREATE TABLE decision_projection (
       event_id TEXT PRIMARY KEY,
       output_id TEXT NOT NULL,
       state TEXT NOT NULL,
@@ -85,7 +99,7 @@ const MIGRATIONS = [
     );
   `,
   `
-    CREATE TABLE IF NOT EXISTS telemetry_projection (
+    CREATE TABLE telemetry_projection (
       output_id TEXT NOT NULL,
       signal TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -95,7 +109,7 @@ const MIGRATIONS = [
     );
   `,
   `
-    CREATE TABLE IF NOT EXISTS pull_request_projection (
+    CREATE TABLE pull_request_projection (
       snapshot_id TEXT PRIMARY KEY,
       output_id TEXT NOT NULL,
       repository TEXT NOT NULL,
@@ -106,6 +120,19 @@ const MIGRATIONS = [
       commit_count INTEGER NOT NULL,
       file_count INTEGER NOT NULL,
       captured_at TEXT NOT NULL
+    );
+  `,
+  `
+    CREATE TABLE pull_request_sync_projection (
+      output_id TEXT PRIMARY KEY,
+      repository TEXT NOT NULL,
+      pull_request_number INTEGER NOT NULL,
+      sync_state TEXT NOT NULL,
+      sync_message TEXT NOT NULL,
+      canonical_repository TEXT,
+      last_attempted_at TEXT NOT NULL,
+      last_successful_at TEXT,
+      rate_limit_reset_at TEXT
     );
   `
 ];

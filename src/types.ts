@@ -25,6 +25,7 @@ export type EventType =
   | "action.state_changed"
   | "pull_request.linked"
   | "pull_request.snapshot_recorded"
+  | "pull_request.sync_status_recorded"
   | "run.linked"
   | "decision.recorded"
   | "output.superseded"
@@ -70,6 +71,11 @@ export interface OutputListItem {
   staleReason: string | null;
   pullRequestRepo: string | null;
   pullRequestNumber: number | null;
+  pullRequestSyncState: PullRequestSyncState | null;
+  pullRequestSyncMessage: string | null;
+  pullRequestLastSyncedAt: string | null;
+  pullRequestCanonicalRepo: string | null;
+  pullRequestRateLimitResetAt: string | null;
 }
 
 export interface ArtifactRecord {
@@ -121,6 +127,7 @@ export interface OutputDetail {
   decisions: DecisionRecord[];
   telemetryCoverage: TelemetryCoverageRecord[];
   pullRequestSnapshots: PullRequestSnapshot[];
+  pullRequestSyncStatus: PullRequestSyncStatus | null;
 }
 
 export interface PullRequestSnapshot {
@@ -133,6 +140,27 @@ export interface PullRequestSnapshot {
   commitCount: number;
   fileCount: number;
   capturedAt: string;
+}
+
+export type PullRequestSyncState =
+  | "not_linked"
+  | "sync_ok"
+  | "repo_renamed"
+  | "rate_limited"
+  | "auth_expired"
+  | "offline"
+  | "not_found"
+  | "sync_error";
+
+export interface PullRequestSyncStatus {
+  repository: string;
+  pullRequestNumber: number;
+  syncState: PullRequestSyncState;
+  syncMessage: string;
+  canonicalRepository: string | null;
+  lastAttemptedAt: string;
+  lastSuccessfulAt: string | null;
+  rateLimitResetAt: string | null;
 }
 
 export interface DashboardSnapshot {

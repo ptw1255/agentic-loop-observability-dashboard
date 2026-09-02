@@ -24,6 +24,11 @@ interface OutputListItem {
   staleReason: string | null;
   pullRequestRepo: string | null;
   pullRequestNumber: number | null;
+  pullRequestSyncState: string | null;
+  pullRequestSyncMessage: string | null;
+  pullRequestLastSyncedAt: string | null;
+  pullRequestCanonicalRepo: string | null;
+  pullRequestRateLimitResetAt: string | null;
 }
 
 interface ArtifactRecord {
@@ -79,6 +84,16 @@ interface OutputDetail {
     fileCount: number;
     capturedAt: string;
   }>;
+  pullRequestSyncStatus: {
+    repository: string;
+    pullRequestNumber: number;
+    syncState: string;
+    syncMessage: string;
+    canonicalRepository: string | null;
+    lastAttemptedAt: string;
+    lastSuccessfulAt: string | null;
+    rateLimitResetAt: string | null;
+  } | null;
 }
 
 interface DashboardData {
@@ -101,6 +116,9 @@ const state = {
   statusText: "Loading local state...",
   errorText: ""
 };
+
+let pollingHandle: number | null = null;
+let syncInFlight = false;
 
 const elements = {
   status: document.querySelector<HTMLElement>("[data-role=status]"),
@@ -128,6 +146,7 @@ async function loadDashboard(outputId?: string): Promise<void> {
     state.selectedArtifactId = state.data.selectedOutput?.artifacts[0]?.artifactId ?? null;
     setStatus(`Local snapshot refreshed ${formatDateTime(state.data.generatedAt)}`);
     render();
+    schedulePullRequestPolling();
   } catch (error) {
     state.errorText = error instanceof Error ? error.message : "Unknown load error";
     setStatus("Unable to load local dashboard state.");
@@ -270,8 +289,23 @@ function renderDetail(): void {
         <dl class="stacked-list">
           <div><dt>Run ID</dt><dd>${escapeHtml(detail.summary.runId ?? "Not linked yet")}</dd></div>
           <div><dt>PR summary</dt><dd>${renderPrSummary(detail)}</dd></div>
+          <div><dt>Sync state</dt><dd>${renderPullRequestSyncState(detail)}</dd></div>
           <div><dt>Staleness</dt><dd>${escapeHtml(detail.summary.staleReason ?? "Fresh local snapshot")}</dd></div>
         </dl>
+        <div class="decision-actions">
+          <button data-action="sync-pr" class="action-button">Sync PR now</button>
+        </div>
+        <label class="field">
+          <span>Repository</span>
+          <input id="pullRequestRepo" type="text" value="${escapeHtml(detail.summary.pullRequestRepo ?? "")}" placeholder="ptw1255/factorio" />
+        </label>
+        <label class="field">
+          <span>PR number</span>
+          <input id="pullRequestNumber" type="number" min="1" value="${detail.summary.pullRequestNumber ?? ""}" />
+        </label>
+        <div class="decision-actions">
+          <button data-action="link-pr" class="action-button">Link PR</button>
+        </div>
       </section>
     </section>
 
@@ -304,6 +338,7 @@ function renderDetail(): void {
 
   wireDecisionButtons(detail.summary.outputId);
   wireArtifactTabs(detail.artifacts);
+  wirePullRequestControls(detail.summary.outputId);
 }
 
 function renderPrSummary(detail: OutputDetail): string {
@@ -313,6 +348,19 @@ function renderPrSummary(detail: OutputDetail): string {
   }
 
   return `${detail.summary.pullRequestRepo} #${detail.summary.pullRequestNumber} · ${latest.state} · ${latest.checksSummary}`;
+}
+
+function renderPullRequestSyncState(detail: OutputDetail): string {
+  const status = detail.pullRequestSyncStatus;
+  if (!status) {
+    return "No sync attempt recorded yet.";
+  }
+
+  const canonical = status.canonicalRepository && status.canonicalRepository !== status.repository
+    ? ` · canonical ${status.canonicalRepository}`
+    : "";
+  const reset = status.rateLimitResetAt ? ` · reset ${formatDateTime(status.rateLimitResetAt)}` : "";
+  return `${formatLabel(status.syncState)} · ${status.syncMessage}${canonical}${reset}`;
 }
 
 function renderActionItems(detail: OutputDetail): string {
@@ -598,6 +646,42 @@ function wireDecisionButtons(outputId: string): void {
   });
 }
 
+function wirePullRequestControls(outputId: string): void {
+  const syncButton = document.querySelector<HTMLButtonElement>("[data-action=sync-pr]");
+  syncButton?.addEventListener("click", () => {
+    void syncPullRequest(outputId, false);
+  });
+
+  const linkButton = document.querySelector<HTMLButtonElement>("[data-action=link-pr]");
+  linkButton?.addEventListener("click", async () => {
+    const repositoryInput = document.querySelector<HTMLInputElement>("#pullRequestRepo");
+    const numberInput = document.querySelector<HTMLInputElement>("#pullRequestNumber");
+    const repository = repositoryInput?.value.trim() ?? "";
+    const pullRequestNumber = Number(numberInput?.value ?? "");
+
+    setStatus("Linking pull request...");
+
+    const response = await fetch("/api/pull-requests/link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outputId, repository, pullRequestNumber })
+    });
+    const payload = (await response.json()) as DashboardData | { error: string };
+    if (!response.ok || "error" in payload) {
+      state.errorText = "error" in payload ? payload.error : "Pull request link failed.";
+      render();
+      return;
+    }
+
+    state.data = payload;
+    state.selectedOutputId = payload.selectedOutput?.summary.outputId ?? null;
+    state.errorText = "";
+    setStatus("Pull request link recorded.");
+    render();
+    schedulePullRequestPolling();
+  });
+}
+
 function wireArtifactTabs(artifacts: ArtifactRecord[]): void {
   document.querySelectorAll<HTMLButtonElement>("[data-artifact-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -647,6 +731,68 @@ function loadHashState(): void {
   state.selectedArtifactId = params.get("artifact");
   state.artifactView = (params.get("view") as typeof state.artifactView) || "compact";
   state.artifactPathFilter = params.get("path") || "";
+}
+
+function schedulePullRequestPolling(): void {
+  if (pollingHandle !== null) {
+    window.clearInterval(pollingHandle);
+    pollingHandle = null;
+  }
+
+  const detail = state.data?.selectedOutput;
+  if (!detail?.summary.pullRequestRepo || !detail.summary.pullRequestNumber) {
+    return;
+  }
+
+  const shouldSyncImmediately =
+    !detail.pullRequestSyncStatus ||
+    !detail.pullRequestSyncStatus.lastSuccessfulAt ||
+    Date.now() - new Date(detail.pullRequestSyncStatus.lastSuccessfulAt).getTime() > 5 * 60 * 1000;
+
+  if (shouldSyncImmediately) {
+    void syncPullRequest(detail.summary.outputId, true);
+  }
+
+  pollingHandle = window.setInterval(() => {
+    void syncPullRequest(detail.summary.outputId, true);
+  }, 60_000);
+}
+
+async function syncPullRequest(outputId: string, background: boolean): Promise<void> {
+  if (syncInFlight) {
+    return;
+  }
+
+  syncInFlight = true;
+  if (!background) {
+    setStatus("Syncing pull request from local GitHub CLI...");
+  }
+
+  try {
+    const response = await fetch("/api/pull-requests/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outputId })
+    });
+    const payload = (await response.json()) as DashboardData | { error: string };
+    if (!response.ok || "error" in payload) {
+      state.errorText = "error" in payload ? payload.error : "Pull request sync failed.";
+      render();
+      return;
+    }
+
+    state.data = payload;
+    state.selectedOutputId = payload.selectedOutput?.summary.outputId ?? null;
+    state.errorText = "";
+    if (!background) {
+      setStatus(`Pull request sync updated ${formatDateTime(payload.generatedAt)}`);
+    } else {
+      setStatus(`Background sync refreshed ${formatDateTime(payload.generatedAt)}`);
+    }
+    render();
+  } finally {
+    syncInFlight = false;
+  }
 }
 
 function escapeHtml(value: string): string {
